@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>3D 카트라이더 (원작 상자형 카트 & 후진 드리프트)</title>
+<title>3D 카트라이더 (기깔난 카트 & 디지니 복귀)</title>
 <style>
   body { margin: 0; overflow: hidden; background-color: #f0f0f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
   
@@ -123,7 +123,7 @@
   </div>
   <div id="techAlert">순간 부스터!</div>
   <div class="controls-info">
-    <strong>[방향키]</strong> 이동(전진/후진) &nbsp;&nbsp;|&nbsp;&nbsp; <strong>[Shift]</strong> 드리프트 &nbsp;&nbsp;|&nbsp;&nbsp; <strong>[Ctrl]</strong> 부스터
+    <strong>[방향키]</strong> 이동(전진/후진) &nbsp;&nbsp;|&nbsp;&nbsp; <strong>[Shift]</strong> 드리프트 &nbsp;&nbsp;|&nbsp;&nbsp; <strong>[Ctrl]</strong> 부스터 발동
   </div>
 </div>
 
@@ -161,7 +161,7 @@ const gridHelper = new THREE.GridHelper(10000, 500, 0xcccccc, 0xe0e0e0);
 scene.add(gridHelper);
 
 // ==========================================
-// 2. 완벽한 캐릭터 조형 (디지니 은색 링 복구!)
+// 2. 완벽한 캐릭터 조형 (디지니 은색 링 복구 & 1.5배 스케일업)
 // ==========================================
 let frontWheelL, frontWheelR; 
 
@@ -181,6 +181,7 @@ function createCharacterModel(type) {
     headGroup.add(centerMesh);
 
     if (type === 'dao' || !type) {
+        // 다오: 매끄러운 십자 곡선 혹
         const lobeGeom = new THREE.SphereGeometry(0.95, 32, 32); 
         const lobeL = new THREE.Mesh(lobeGeom, headMat); 
         lobeL.position.set(-0.8, 0, 0); 
@@ -193,6 +194,7 @@ function createCharacterModel(type) {
         headGroup.add(lobeR);
     } 
     else if (type === 'bazzi') {
+        // 배찌: 둥근 귀
         const earGeom = new THREE.SphereGeometry(0.45, 16, 16);
         const earL = new THREE.Mesh(earGeom, headMat); 
         earL.position.set(-0.75, 1.1, 0); 
@@ -205,6 +207,7 @@ function createCharacterModel(type) {
         headGroup.add(earR);
     } 
     else if (type === 'dizzy') {
+        // 디지니: 정수리 뒤편으로 누운 둥근 캡슐 귀 + 은색 베이스 링 완벽 복구
         const podGeom = new THREE.SphereGeometry(0.55, 32, 32); 
         const ringGeom = new THREE.TorusGeometry(0.55, 0.12, 16, 32); 
         const ringMat = new THREE.MeshLambertMaterial({color: 0xcccccc}); 
@@ -239,11 +242,14 @@ function createCharacterModel(type) {
     body.castShadow = true;
     group.add(body);
 
+    // 캐릭터 1.5배 거대화
     group.scale.set(1.5, 1.5, 1.5);
     return group;
 }
 
-// 3. 원작 고증 상자형 기본 카트 바디 복구
+// ==========================================
+// 3. 기깔난 스포츠 카트 바디 복구
+// ==========================================
 function createKart() {
   const kartRoot = new THREE.Group(); 
   const kartBody = new THREE.Group(); 
@@ -251,63 +257,104 @@ function createKart() {
 
   const whiteMat = new THREE.MeshLambertMaterial({color: 0xf5f6fa});
   const blueMat = new THREE.MeshLambertMaterial({color: 0x3498db});
-  const darkMat = new THREE.MeshLambertMaterial({color: 0x222222});
+  const darkMat = new THREE.MeshLambertMaterial({color: 0x2c3e50});
+  const blackMat = new THREE.MeshLambertMaterial({color: 0x111111});
 
-  const chassis = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.2, 5.0), whiteMat);
-  chassis.position.y = 1.2;
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.5, 5.0), darkMat);
+  chassis.position.y = 0.5;
   chassis.castShadow = true;
   kartBody.add(chassis);
 
-  const frontBody = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.8, 2.0), whiteMat);
-  frontBody.position.set(0, 1.0, 3.5); 
-  frontBody.castShadow = true; 
-  kartBody.add(frontBody);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 1.5), whiteMat);
+  nose.position.set(0, 0.6, 2.8);
+  nose.castShadow = true;
+  kartBody.add(nose);
 
-  const accentMat = new THREE.MeshLambertMaterial({color: 0x34495e});
-  const bumper = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.4, 0.5), accentMat);
-  bumper.position.set(0, 0.8, 4.6); 
-  kartBody.add(bumper);
+  const noseAccent = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.6, 1.8), blueMat);
+  noseAccent.position.set(0, 0.9, 2.3);
+  noseAccent.rotation.x = Math.PI / 12; 
+  noseAccent.castShadow = true;
+  kartBody.add(noseAccent);
 
-  const cockpit = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.8, 2.0), darkMat);
-  cockpit.position.set(0, 2.0, 0.5); 
-  kartBody.add(cockpit);
+  const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 3.2), whiteMat);
+  sideL.position.set(-1.4, 0.7, 0.5); sideL.castShadow = true;
+  kartBody.add(sideL);
+  
+  const sideR = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 3.2), whiteMat);
+  sideR.position.set(1.4, 0.7, 0.5); sideR.castShadow = true;
+  kartBody.add(sideR);
 
-  kartRoot.charSlot = new THREE.Group();
-  kartRoot.charSlot.position.set(0, 2.2, 0.5); 
-  kartBody.add(kartRoot.charSlot);
+  const engine = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 1.6), darkMat);
+  engine.position.set(0, 1.1, -1.8); engine.castShadow = true;
+  kartBody.add(engine);
+
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.6, 0.4), darkMat);
+  seat.position.set(0, 1.5, -0.9);
+  seat.rotation.x = -Math.PI / 16; 
+  seat.castShadow = true;
+  kartBody.add(seat);
+
+  const steerColumn = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.2), darkMat);
+  steerColumn.position.set(0, 1.4, 1.4);
+  steerColumn.rotation.x = Math.PI / 4;
+  kartBody.add(steerColumn);
+  
+  const steerWheel = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.1, 8, 24), blackMat);
+  steerWheel.position.set(0, 1.8, 1.0);
+  steerWheel.rotation.x = Math.PI / 4;
+  kartBody.add(steerWheel);
 
   const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.2, 1.2), blueMat);
-  spoilerWing.position.set(0, 2.6, -2.5); 
-  spoilerWing.castShadow = true;
+  spoilerWing.position.set(0, 2.5, -2.8); spoilerWing.castShadow = true;
   kartBody.add(spoilerWing);
   
-  const supportGeom = new THREE.BoxGeometry(0.2, 1.0, 0.6);
-  const supportMat = new THREE.MeshLambertMaterial({color: 0xcccccc});
-  const supportL = new THREE.Mesh(supportGeom, supportMat); supportL.position.set(-1.2, 2.0, -2.5); supportL.castShadow = true; kartBody.add(supportL);
-  const supportR = new THREE.Mesh(supportGeom, supportMat); supportR.position.set(1.2, 2.0, -2.5); supportR.castShadow = true; kartBody.add(supportR);
+  const supportL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.8), whiteMat);
+  supportL.position.set(-1.2, 1.9, -2.5); supportL.castShadow = true;
+  kartBody.add(supportL);
+  
+  const supportR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.8), whiteMat);
+  supportR.position.set(1.2, 1.9, -2.5); supportR.castShadow = true;
+  kartBody.add(supportR);
 
-  const wheelGeom = new THREE.CylinderGeometry(0.8, 0.8, 0.6, 24); wheelGeom.rotateZ(Math.PI / 2); 
+  kartRoot.charSlot = new THREE.Group();
+  kartRoot.charSlot.position.set(0, 1.6, -0.2); 
+  kartBody.add(kartRoot.charSlot);
+
+  const wheelGeom = new THREE.CylinderGeometry(0.8, 0.8, 0.8, 24);
+  wheelGeom.rotateZ(Math.PI / 2); 
   const wheelMat = new THREE.MeshLambertMaterial({color: 0x111111});
   
-  frontWheelL = new THREE.Group(); frontWheelL.position.set(-2.0, 0.8, 2.5); frontWheelL.add(new THREE.Mesh(wheelGeom, wheelMat)); kartBody.add(frontWheelL);
-  frontWheelR = new THREE.Group(); frontWheelR.position.set(2.0, 0.8, 2.5); frontWheelR.add(new THREE.Mesh(wheelGeom, wheelMat)); kartBody.add(frontWheelR);
+  frontWheelL = new THREE.Group(); frontWheelL.position.set(-2.0, 0.8, 2.5); 
+  const fwlMesh = new THREE.Mesh(wheelGeom, wheelMat); fwlMesh.castShadow = true; frontWheelL.add(fwlMesh); kartBody.add(frontWheelL);
   
-  const backWheelL = new THREE.Mesh(wheelGeom, wheelMat); backWheelL.position.set(-2.0, 0.8, -2); kartBody.add(backWheelL);
-  const backWheelR = new THREE.Mesh(wheelGeom, wheelMat); backWheelR.position.set(2.0, 0.8, -2); kartBody.add(backWheelR);
+  frontWheelR = new THREE.Group(); frontWheelR.position.set(2.0, 0.8, 2.5);
+  const fwrMesh = new THREE.Mesh(wheelGeom, wheelMat); fwrMesh.castShadow = true; frontWheelR.add(fwrMesh); kartBody.add(frontWheelR);
+  
+  const backWheelL = new THREE.Mesh(wheelGeom, wheelMat); backWheelL.position.set(-2.0, 0.8, -2); backWheelL.castShadow = true; kartBody.add(backWheelL);
+  const backWheelR = new THREE.Mesh(wheelGeom, wheelMat); backWheelR.position.set(2.0, 0.8, -2); backWheelR.castShadow = true; kartBody.add(backWheelR);
 
-  const exhaustGeom = new THREE.CylinderGeometry(0.3, 0.3, 0.5, 12); exhaustGeom.rotateX(Math.PI / 2); const exhaustMat = new THREE.MeshLambertMaterial({color: 0x7f8c8d});
-  const ex1 = new THREE.Mesh(exhaustGeom, exhaustMat); ex1.position.set(-0.8, 0.8, -2.8); kartBody.add(ex1); 
+  const exhaustGeom = new THREE.CylinderGeometry(0.3, 0.3, 0.5, 12);
+  exhaustGeom.rotateX(Math.PI / 2);
+  const exhaustMat = new THREE.MeshLambertMaterial({color: 0x7f8c8d});
+  const ex1 = new THREE.Mesh(exhaustGeom, exhaustMat); ex1.position.set(-0.8, 0.8, -2.8); kartBody.add(ex1);
   const ex2 = new THREE.Mesh(exhaustGeom, exhaustMat); ex2.position.set(0.8, 0.8, -2.8); kartBody.add(ex2);
 
-  const fireGeom = new THREE.ConeGeometry(0.6, 3.0, 12); fireGeom.rotateX(-Math.PI / 2); const fireMat = new THREE.MeshBasicMaterial({color: 0x3498db}); 
+  const fireGeom = new THREE.ConeGeometry(0.6, 3.0, 12);
+  fireGeom.rotateX(-Math.PI / 2);
+  const fireMat = new THREE.MeshBasicMaterial({color: 0x3498db}); 
   kartRoot.fire1 = new THREE.Mesh(fireGeom, fireMat); kartRoot.fire1.position.set(-0.8, 0.8, -4.2); kartRoot.fire1.visible = false; kartBody.add(kartRoot.fire1);
   kartRoot.fire2 = new THREE.Mesh(fireGeom, fireMat); kartRoot.fire2.position.set(0.8, 0.8, -4.2); kartRoot.fire2.visible = false; kartBody.add(kartRoot.fire2);
   
-  const shadowGeom = new THREE.CircleGeometry(4.5, 32); shadowGeom.rotateX(-Math.PI / 2); shadowGeom.scale(1, 1, 1.8); 
-  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false }); 
-  const fakeShadow = new THREE.Mesh(shadowGeom, shadowMat); fakeShadow.position.y = 0.05; kartRoot.add(fakeShadow);
+  const shadowGeom = new THREE.CircleGeometry(4.5, 32); 
+  shadowGeom.rotateX(-Math.PI / 2);
+  shadowGeom.scale(1, 1, 1.8); 
+  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false });
+  const fakeShadow = new THREE.Mesh(shadowGeom, shadowMat);
+  fakeShadow.position.y = 0.05; 
+  kartRoot.add(fakeShadow);
 
-  kartRoot.bodyWrapper = kartBody; return kartRoot;
+  kartRoot.bodyWrapper = kartBody; 
+  return kartRoot;
 }
 
 const carMesh = createKart();
@@ -326,8 +373,8 @@ changeCharacter('dizzy');
 let isGameRunning = false;
 let lobbyAnimId;
 
-camera.position.set(10, 8, 16);
-camera.lookAt(new THREE.Vector3(0, 2, 0));
+camera.position.set(13, 10, 18);
+camera.lookAt(new THREE.Vector3(0, 3, 0));
 
 function animateLobby() {
     if (isGameRunning) return;
@@ -353,7 +400,7 @@ window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key)) keys[e.ke
 const MAX_NORMAL = 150 / 60;   
 const MAX_INSTANT = 174 / 60;  
 const MAX_BOOST = 240 / 60;    
-const MAX_REVERSE = -60 / 60; // 최대 후진 속도
+const MAX_REVERSE = -60 / 60; 
 
 const car = {
   speed: 0, accel: 0.02, boostAccel: 0.06, instantAccel: 0.035, 
@@ -376,7 +423,7 @@ function showTechAlert(text, color) {
 }
 
 // ==========================================
-// 💡 5. 인게임 물리 루프 (후진 드리프트 완벽 패치)
+// 💡 5. 인게임 물리 루프 (순수 후진 드리프트, 게이지/순부 제외)
 // ==========================================
 function animateGame() {
   if (!isGameRunning) return;
@@ -391,8 +438,8 @@ function animateGame() {
     car.boostTime--; if(car.boostTime <= 0) car.isBoosting = false; 
   }
 
-  // 💡 [핵심] 후진 시에도 드리프트 진입 가능하게 조건 수정
-  let isDrifting = keys.Shift && Math.abs(car.speed) > 0.5; // 절대값으로 속도 체크
+  // 💡 후진 중에도 드리프트 허용
+  let isDrifting = keys.Shift && Math.abs(car.speed) > 0.5;
   
   if (isDrifting) car.driftState = 1; 
   else if (car.driftState === 1 && Math.abs(car.lastAngleDiff) > 0.1) car.driftState = 2; 
@@ -403,10 +450,10 @@ function animateGame() {
   let isDragging = (car.driftState === 2);
   let isSliding = isDrifting || isDragging; 
 
-  // 순부 타이밍 (후진 드리프트 종료 후에도 순부 가능하게)
-  if (!isDrifting && car.wasDrifting && Math.abs(car.lastAngleDiff) > 0.08) {
+  // 💡 [핵심] 순부(순간 부스터)는 전진(car.speed >= 0) 시에만 발동되도록 제한
+  if (!isDrifting && car.wasDrifting && Math.abs(car.lastAngleDiff) > 0.08 && car.speed >= 0) {
     car.instantBoostWindow = 30; 
-    car.canTriggerInstant = (car.speed >= 0) ? !keys.ArrowUp : !keys.ArrowDown; 
+    car.canTriggerInstant = !keys.ArrowUp; 
   }
   
   if (car.instantBoostWindow > 0) {
@@ -416,14 +463,6 @@ function animateGame() {
         if (keys.ArrowUp && car.canTriggerInstant && !car.isInstantBoosting) {
           car.isInstantBoosting = true; car.instantBoostTimer = 30; car.instantBoostWindow = 0; car.speed += 0.3; 
           showTechAlert("순간 부스터!", "#f1c40f");
-          if (Math.abs(car.lastAngleDiff) < 0.3) { car.driftState = 0; car.currentGrip = 0.8; }
-        }
-    } else {
-        // 후진 순부 (후진 방향으로 가속)
-        if (!keys.ArrowDown) car.canTriggerInstant = true;
-        if (keys.ArrowDown && car.canTriggerInstant && !car.isInstantBoosting) {
-          car.isInstantBoosting = true; car.instantBoostTimer = 30; car.instantBoostWindow = 0; car.speed -= 0.3; 
-          showTechAlert("백 부스터!", "#e74c3c");
           if (Math.abs(car.lastAngleDiff) < 0.3) { car.driftState = 0; car.currentGrip = 0.8; }
         }
     }
@@ -444,7 +483,7 @@ function animateGame() {
   
   let targetSteer = 0; 
   if (absSpeed > 0.1) {
-    let steerDir = (car.speed >= 0) ? 1 : -1; // 후진 시 조향 반전
+    let steerDir = (car.speed >= 0) ? 1 : -1; // 후진 시 조향 반전 (현실적 컨트롤)
     if (keys.ArrowLeft) { car.angle += tSpeed * steerDir; targetSteer = 0.5 * steerDir; }
     if (keys.ArrowRight) { car.angle -= tSpeed * steerDir; targetSteer = -0.5 * steerDir; }
   }
@@ -467,6 +506,7 @@ function animateGame() {
   let isOppositeDir = (angleDiff > 0.2 && keys.ArrowRight) || (angleDiff < -0.2 && keys.ArrowLeft);
   if (isSliding && isOppositeDir) {
     targetGrip = 0.5; car.driftState = 0; 
+    // 💡 뉴커팅 이펙트도 전진 시에만 표출
     if (Math.abs(angleDiff) > 0.3 && Math.random() < 0.1 && car.speed >= 0) showTechAlert("뉴커팅!", "#e74c3c");
   }
   
@@ -497,7 +537,6 @@ function animateGame() {
       }
   }
 
-  // 드리프트 중 감속 페널티 (후진 시에도 적용되도록 수정)
   if (isDrifting) {
       if (keys.ArrowUp && car.speed > 0) {
           car.speed *= 0.995; 
@@ -552,7 +591,7 @@ function animateGame() {
   car.pitchVelocity += pitchForce; car.pitchVelocity *= damping; car.visualPitch += car.pitchVelocity;
   carMesh.bodyWrapper.rotation.x = car.visualPitch;
 
-  // 💡 [핵심] 후진 시에도 스키드 마크(바퀴 자국) 생성
+  // 후진 시에도 스키드 마크는 정상 생성
   if (Math.abs(angleDiff) > 0.08 && absSpeed > 1 && car.currentGrip < 0.12) {
     const skidMat = new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.5, depthWrite: false });
     const dirX = Math.sin(car.angle); const dirZ = Math.cos(car.angle);
@@ -581,16 +620,18 @@ function animateGame() {
       carMesh.fire1.scale.set(1, 1, scale); carMesh.fire2.scale.set(1, 1, scale);
   }
 
-  if (isSliding && Math.abs(angleDiff) > 0.05 && absSpeed > 1) {
+  // 💡 [핵심] 드리프트 게이지는 전진(car.speed > 1) 방향에서만 충전되도록 완벽 차단
+  if (isSliding && Math.abs(angleDiff) > 0.05 && car.speed > 1) {
     if (car.boosterCount < car.maxBoosters) {
       if (car.boostsGainedThisDrift < 2) {
         let chargeMultiplier = (car.isBoosting || car.isInstantBoosting) ? 1.6 : 2.2;
-        car.gauge += Math.abs(angleDiff) * (absSpeed * 0.4) * chargeMultiplier; // 후진 시에도 게이지 충전
+        car.gauge += Math.abs(angleDiff) * (car.speed * 0.4) * chargeMultiplier; 
         if (car.gauge >= 100) { car.boosterCount++; car.boostsGainedThisDrift++; car.gauge = 0; }
       }
     } else { car.gauge = 0; }
   }
 
+  // 전진 시 자동 게이지 충전
   if (!isSliding && car.speed > 1.0 && keys.ArrowUp) {
       if (car.boosterCount < car.maxBoosters) {
           car.gauge += car.speed * 0.04; 
