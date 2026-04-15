@@ -1,6 +1,4 @@
-// 🗺️ 맵 좌표 데이터
-const mapToWorld = (cx, cz) => ({ x: (cx / 2048) * 1024 - 512, z: (cz / 2048) * 1024 - 512 });
-
+// 🗺️ 맵 좌표 데이터 (globals.js의 mapToWorld 함수를 그대로 가져다 씁니다)
 const trackPointsCanvas = [
     [1400, 1750], [400, 1750], [400, 1500], [1500, 1500], [1500, 1250], 
     [300, 1250], [300, 1000], [1500, 1000], [1500, 750], [400, 750], 
@@ -58,7 +56,7 @@ function createMapTexture() {
     return texture;
 }
 
-// 💡 [렌더링 롤백 & 하이브리드 최적화] 시각적으로 완벽한 스마트 돌담 복구!
+// 💡 [시각 최적화] 렉 없이 아름답게 그리기만 하는 스마트 돌담 (물리 엔진 등록X)
 function buildSmartWalls() {
     const R = 48; const step = 2.5; const rawPoints = [];
     for (let i = 0; i < trackPointsWorld.length - 1; i++) {
@@ -87,7 +85,7 @@ function buildSmartWalls() {
             if (distSq < minDist) minDist = distSq;
         }
         if (Math.sqrt(minDist) < R - 0.5) return false;
-        if (inShortcutZone(pt.x, pt.z)) return false; // 지름길 구멍 뚫기
+        if (inShortcutZone(pt.x, pt.z)) return false; 
         return true;
     });
 
@@ -100,7 +98,7 @@ function buildSmartWalls() {
     validPoints.forEach((pt, idx) => {
         dummy.position.set(pt.x, WALL_H / 2, pt.z); dummy.updateMatrix(); baseInst.setMatrixAt(idx, dummy.matrix);
         dummy.position.set(pt.x, WALL_H + TOP_H / 2, pt.z); dummy.updateMatrix(); topInst.setMatrixAt(idx, dummy.matrix);
-        // 🚨 렉의 주범이었던 addBoxCollider(...) 삭제! (눈에만 보이고 물리 연산은 하지 않음)
+        // 🚨 addBoxCollider(물리충돌) 삭제됨 -> 렉 완벽 해결!
     });
     
     baseInst.castShadow = true; topInst.castShadow = true; mapGroup.add(baseInst); mapGroup.add(topInst);
@@ -114,6 +112,7 @@ function createTree(x, z) {
     leaves.position.y = 15; leaves.castShadow = true; group.add(leaves);
     group.position.set(x, 0, z); mapGroup.add(group);
 }
+
 function createHouse(x, z, rotY) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(30, 20, 30), new THREE.MeshLambertMaterial({color: 0xffeaa7}));
@@ -122,6 +121,7 @@ function createHouse(x, z, rotY) {
     roof.position.y = 27.5; roof.rotation.y = Math.PI / 4; roof.castShadow = true; group.add(roof);
     group.position.set(x, 0, z); group.rotation.y = rotY; mapGroup.add(group);
 }
+
 function createClockTower(x, z) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(20, 50, 20), new THREE.MeshLambertMaterial({color: 0xecf0f1}));
