@@ -78,8 +78,8 @@ function buildSmartWalls() {
         }
         if (Math.sqrt(minDist) < R - 0.5) return false;
 
-        if (Math.abs(pt.x - 88) < 35 && pt.z > 100 && pt.z < 250) return false; // 숏컷 1 구멍
-        if (Math.abs(pt.x - -212) < 35 && pt.z > -25 && pt.z < 125) return false; // 숏컷 2 구멍
+        if (Math.abs(pt.x - 88) < 35 && pt.z > 100 && pt.z < 250) return false; 
+        if (Math.abs(pt.x - -212) < 35 && pt.z > -25 && pt.z < 125) return false; 
         return true;
     });
 
@@ -92,7 +92,7 @@ function buildSmartWalls() {
     validPoints.forEach((pt, idx) => {
         dummy.position.set(pt.x, WALL_H / 2, pt.z); dummy.updateMatrix(); baseInst.setMatrixAt(idx, dummy.matrix);
         dummy.position.set(pt.x, WALL_H + TOP_H / 2, pt.z); dummy.updateMatrix(); topInst.setMatrixAt(idx, dummy.matrix);
-        addBoxCollider(pt.x, pt.z, 3.6, 3.6, 0); // 물리엔진 등록
+        // 🚨 최적화 핵심: 여기에 있던 addBoxCollider 12000개를 삭제했습니다! (충돌은 수학 벡터로 완벽 커버됨)
     });
     baseInst.castShadow = true; topInst.castShadow = true; mapGroup.add(baseInst); mapGroup.add(topInst);
 }
@@ -132,6 +132,7 @@ function createStartBanner(x, z, rotY) {
     const p2 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p2.position.set(0, 17.5, 60); p2.castShadow = true; group.add(p2);
     
     let sin = Math.sin(rotY), cos = Math.cos(rotY);
+    // 물리 엔진은 오직 딱딱한 이 '기둥 2개'만 연산합니다. 
     addBoxCollider(x + (-60)*(-sin), z + (-60)*cos, 4, 4, rotY);
     addBoxCollider(x + (60)*(-sin), z + (60)*cos, 4, 4, rotY);
 
@@ -154,7 +155,7 @@ function loadMap(mapName) {
     currentMap = mapName;
     while(mapGroup.children.length > 0) { mapGroup.remove(mapGroup.children[0]); }
     colliderGrid.clear(); 
-    boxColliders.length = 0; // 배열 초기화 필수
+    boxColliders.length = 0; 
 
     if (mapName === 'village') {
         scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.Fog(0x87CEEB, 200, 900);
