@@ -1,4 +1,6 @@
-// 🗺️ 맵 좌표 데이터 (globals.js의 mapToWorld 함수를 그대로 가져다 씁니다)
+// 🗺️ 맵 좌표 데이터
+const mapToWorld = (cx, cz) => ({ x: (cx / 2048) * 1024 - 512, z: (cz / 2048) * 1024 - 512 });
+
 const trackPointsCanvas = [
     [1400, 1750], [400, 1750], [400, 1500], [1500, 1500], [1500, 1250], 
     [300, 1250], [300, 1000], [1500, 1000], [1500, 750], [400, 750], 
@@ -56,7 +58,7 @@ function createMapTexture() {
     return texture;
 }
 
-// 💡 [시각 최적화] 렉 없이 아름답게 그리기만 하는 스마트 돌담 (물리 엔진 등록X)
+// 💡 블랙스크린 100% 해결! (그림자 연산 제거 및 폴리곤 다이어트)
 function buildSmartWalls() {
     const R = 48; const step = 2.5; const rawPoints = [];
     for (let i = 0; i < trackPointsWorld.length - 1; i++) {
@@ -72,7 +74,6 @@ function buildSmartWalls() {
             rawPoints.push({x: p2.x + Math.cos(a) * R, z: p2.z + Math.sin(a) * R});
         }
     }
-    
     const validPoints = rawPoints.filter(pt => {
         let minDist = Infinity;
         for (let i = 0; i < trackPointsWorld.length - 1; i++) {
@@ -90,18 +91,30 @@ function buildSmartWalls() {
     });
 
     const WALL_H = 18; const TOP_H = 4;
-    const baseGeom = new THREE.CylinderGeometry(1.8, 1.8, WALL_H, 8); const topGeom = new THREE.CylinderGeometry(2.0, 2.0, TOP_H, 8);
-    const baseMat = new THREE.MeshLambertMaterial({color: 0x95a5a6}); const topMat = new THREE.MeshLambertMaterial({color: 0x27ae60});
-    const baseInst = new THREE.InstancedMesh(baseGeom, baseMat, validPoints.length); const topInst = new THREE.InstancedMesh(topGeom, topMat, validPoints.length);
+    // GPU 최적화: 8각형 대신 5각형으로 렌더링 비용 대폭 절감
+    const baseGeom = new THREE.CylinderGeometry(1.8, 1.8, WALL_H, 5); 
+    const topGeom = new THREE.CylinderGeometry(2.0, 2.0, TOP_H, 5);
+    const baseMat = new THREE.MeshLambertMaterial({color: 0x95a5a6}); 
+    const topMat = new THREE.MeshLambertMaterial({color: 0x27ae60});
+    
+    const baseInst = new THREE.InstancedMesh(baseGeom, baseMat, validPoints.length); 
+    const topInst = new THREE.InstancedMesh(topGeom, topMat, validPoints.length);
     const dummy = new THREE.Object3D();
     
     validPoints.forEach((pt, idx) => {
         dummy.position.set(pt.x, WALL_H / 2, pt.z); dummy.updateMatrix(); baseInst.setMatrixAt(idx, dummy.matrix);
         dummy.position.set(pt.x, WALL_H + TOP_H / 2, pt.z); dummy.updateMatrix(); topInst.setMatrixAt(idx, dummy.matrix);
-        // 🚨 addBoxCollider(물리충돌) 삭제됨 -> 렉 완벽 해결!
+        addBoxCollider(pt.x, pt.z, 3.6, 3.6, 0); // OBB 물리엔진 등록 유지!
     });
     
-    baseInst.castShadow = true; topInst.castShadow = true; mapGroup.add(baseInst); mapGroup.add(topInst);
+    baseInst.instanceMatrix.needsUpdate = true;
+    topInst.instanceMatrix.needsUpdate = true;
+    
+    // 🚨 블랙스크린 해결의 핵심! 1만개 도형의 무거운 그림자 끄기
+    baseInst.castShadow = false; topInst.castShadow = false; 
+    baseInst.receiveShadow = false; topInst.receiveShadow = false;
+
+    mapGroup.add(baseInst); mapGroup.add(topInst);
 }
 
 function createTree(x, z) {
@@ -112,7 +125,6 @@ function createTree(x, z) {
     leaves.position.y = 15; leaves.castShadow = true; group.add(leaves);
     group.position.set(x, 0, z); mapGroup.add(group);
 }
-
 function createHouse(x, z, rotY) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(30, 20, 30), new THREE.MeshLambertMaterial({color: 0xffeaa7}));
@@ -121,7 +133,6 @@ function createHouse(x, z, rotY) {
     roof.position.y = 27.5; roof.rotation.y = Math.PI / 4; roof.castShadow = true; group.add(roof);
     group.position.set(x, 0, z); group.rotation.y = rotY; mapGroup.add(group);
 }
-
 function createClockTower(x, z) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(20, 50, 20), new THREE.MeshLambertMaterial({color: 0xecf0f1}));
@@ -138,7 +149,6 @@ function createStartBanner(x, z, rotY) {
     const p1 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p1.position.set(0, 17.5, -60); p1.castShadow = true; group.add(p1);
     const p2 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p2.position.set(0, 17.5, 60); p2.castShadow = true; group.add(p2);
     
-    // 오직 시작 배너 기둥 2개만 3D 물리박스(OBB)로 등록합니다.
     let sin = Math.sin(rotY), cos = Math.cos(rotY);
     addBoxCollider(x + (-60)*(-sin), z + (-60)*cos, 4, 4, rotY);
     addBoxCollider(x + (60)*(-sin), z + (60)*cos, 4, 4, rotY);
