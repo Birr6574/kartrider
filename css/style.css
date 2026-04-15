@@ -1,1 +1,77 @@
+body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
+/* --- 🎮 게임 내 UI --- */
+#gameUI { display: none; }
+#hud { position: absolute; top: 20px; left: 20px; color: white; background: rgba(0,0,0,0.65); padding: 15px 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10; }
+.gauge-container { width: 250px; height: 20px; background: rgba(255,255,255,0.2); border: 2px solid white; margin-top: 10px; border-radius: 10px; overflow: hidden; }
+#gauge { width: 0%; height: 100%; background: #3498db; transition: width 0.1s, background-color 0.2s; }
+#gauge.maxed { background: #f1c40f; box-shadow: 0 0 10px #f1c40f; }
+
+#boosterSlots { display: flex; gap: 10px; margin-top: 10px; }
+.slot { width: 50px; height: 15px; border: 2px solid white; border-radius: 8px; background: rgba(0,0,0,0.5); transition: all 0.2s; }
+.slot.filled { background: #e74c3c; box-shadow: 0 0 10px #e74c3c; }
+
+#lapDisplay { position: absolute; top: 20px; right: 20px; color: white; background: rgba(0,0,0,0.65); padding: 15px 25px; border-radius: 12px; font-size: 24px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10; }
+
+.controls-info { position: absolute; bottom: 20px; left: 20px; color: rgba(255,255,255,0.9); font-size: 15px; background: rgba(0,0,0,0.65); padding: 10px 15px; border-radius: 8px; z-index: 10; }
+#techAlert { 
+  position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 48px; color: #f1c40f; font-weight: 900; font-style: italic; 
+  opacity: 0; transition: opacity 0.2s; text-shadow: 0 0 20px #e67e22, 3px 3px 0px #d35400; 
+  z-index: 9999; pointer-events: none; text-align: center; line-height: 1.2;
+}
+
+/* --- ⏸️ 일시정지 (ESC) 메뉴 --- */
+#pauseMenu {
+  display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.8); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+}
+#pauseMenu h1 { color: white; font-size: 64px; font-style: italic; margin-bottom: 30px; text-shadow: 4px 4px 0 #3498db; }
+.pause-btn {
+  padding: 15px 50px; font-size: 24px; font-weight: bold; color: white; background: #2c3e50; border: 3px solid white;
+  border-radius: 30px; cursor: pointer; transition: all 0.2s;
+}
+.pause-btn:hover { background: #3498db; transform: scale(1.05); }
+.pause-btn.red { background: #c0392b; }
+.pause-btn.red:hover { background: #e74c3c; }
+
+/* --- 🏠 로비 UI --- */
+#lobbyUI {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 50px; z-index: 100;
+  background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.15) 100%);
+}
+.lobby-title {
+  position: absolute; top: 50px; font-size: 64px; color: white; font-weight: 900; font-style: italic;
+  text-shadow: 4px 4px 0px #3498db, 8px 8px 15px rgba(0,0,0,0.5); letter-spacing: 2px;
+}
+.menu-container { display: flex; gap: 30px; margin-bottom: 40px; }
+.menu-btn {
+  width: 140px; height: 140px; border-radius: 20px; border: 4px solid rgba(255,255,255,0.9);
+  background: rgba(44, 62, 80, 0.85); color: white; font-size: 20px; font-weight: bold; cursor: pointer; transition: all 0.2s;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.3); backdrop-filter: blur(5px);
+}
+.menu-btn:hover { transform: translateY(-10px) scale(1.05); background: rgba(52, 152, 219, 0.95); border-color: white; box-shadow: 0 15px 25px rgba(52, 152, 219, 0.5); }
+.menu-btn span { font-size: 40px; margin-bottom: 10px; }
+#startBtn {
+  padding: 20px 80px; font-size: 32px; font-weight: 900; color: white; background: linear-gradient(135deg, #e74c3c, #c0392b);
+  border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 8px 0px #902b1f, 0 15px 20px rgba(0,0,0,0.4); transition: all 0.1s; letter-spacing: 2px;
+}
+#startBtn:active { transform: translateY(8px); box-shadow: 0 0px 0px #902b1f, 0 5px 10px rgba(0,0,0,0.4); }
+
+/* --- 👤 모달 공통 UI --- */
+.modal-overlay {
+  display: none; position: absolute; top: 50%; right: 50px; transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 30px; border-radius: 20px;
+  box-shadow: -10px 10px 30px rgba(0,0,0,0.3); text-align: center; z-index: 200; flex-direction: column; gap: 15px; width: 280px; border: 3px solid #eee;
+}
+.modal-overlay h2 { margin: 0; color: #2c3e50; font-size: 26px; }
+.list-container { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.item-btn { padding: 15px; font-size: 20px; font-weight: bold; color: white; border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+.item-btn:hover { transform: scale(1.05) translateX(-5px); }
+.close-modal { margin-top: 15px; padding: 12px; font-size: 18px; font-weight: bold; background: #2ecc71; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 0 #27ae60; transition: transform 0.1s; }
+.close-modal:active { transform: translateY(4px); box-shadow: 0 0px 0 #27ae60; }
+
+/* 테마 컬러 */
+.c-dao { background: #1565c0; box-shadow: 0 4px 0 #0d47a1; } .c-bazzi { background: #e74c3c; box-shadow: 0 4px 0 #c0392b; } .c-dizzy { background: #f1c40f; color: #333; box-shadow: 0 4px 0 #f39c12; }
+.m-vil { background: #27ae60; box-shadow: 0 4px 0 #1e8449; } .m-test { background: #95a5a6; box-shadow: 0 4px 0 #7f8c8d; }
