@@ -23,7 +23,6 @@ function exitToLobby() {
     document.getElementById('lobbyUI').style.display = 'flex'; animateLobby();
 }
 
-// 💡 스키드 마크 최적화 (오브젝트 풀링)
 const MAX_SKIDS = 100;
 const skidPoolL = []; const skidPoolR = [];
 let skidIdx = 0;
@@ -42,7 +41,6 @@ function animateLobby() {
 camera.position.set(13, 10, 18); camera.lookAt(new THREE.Vector3(0, 3, 0));
 animateLobby();
 
-// 💡 이벤트 리스너 (오토 리피트 방지)
 window.addEventListener('keydown', e => { 
     if (e.repeat) return; 
     if (keys.hasOwnProperty(e.key)) {
@@ -51,7 +49,6 @@ window.addEventListener('keydown', e => {
             let currentSteer = keys.ArrowLeft ? 1 : (keys.ArrowRight ? -1 : 0);
             let timeSinceRelease = now - car.shiftReleaseTime;
             
-            // 더블 드리프트
             if (timeSinceRelease < 300 && currentSteer !== 0 && currentSteer === car.driftStartDir && car.driftState > 0) {
                 car.isDoubleDrifting = true; car.doubleDriftTimer = 40; showTechAlert("더블 드리프트!", "#9b59b6");
             } else { car.driftStartDir = currentSteer; }
@@ -98,7 +95,6 @@ document.getElementById('startBtn').addEventListener('click', () => {
   animateGame(); 
 });
 
-// 💡 5. 메인 인게임 루프
 function animateGame() {
   if (!isGameRunning) return;
   requestAnimationFrame(animateGame);
@@ -206,8 +202,8 @@ function animateGame() {
   carMesh.position.z += Math.cos(car.velocityAngle) * car.speed;
   
   let px = carMesh.position.x, pz = carMesh.position.z;
-  
-  // 💡 [거리 최적화] 트랙 중심과의 거리 및 가장 가까운 선분 1번 연산
+
+  // 💡 [최적화] R키 복귀용 중앙선 탐색 (1회 연산)
   let minDistTrack = Infinity, closestXx = 0, closestZz = 0, cI = 0;
   if (currentMap === 'village') {
       for (let i = 0; i < trackPointsWorld.length - 1; i++) {
@@ -221,7 +217,6 @@ function animateGame() {
       }
   }
 
-  // R키 복귀
   if (keys.r || keys.R) {
       if (currentMap === 'village') {
           carMesh.position.set(closestXx, 0, closestZz);
@@ -235,9 +230,10 @@ function animateGame() {
       showTechAlert("🔄 복귀!", "#2ecc71"); keys.r = false; keys.R = false; return; 
   }
 
-  // 💡 소수 물체 OBB 물리엔진 판정 (배너 기둥 등)
+  // 💡 [최적화] OBB 공간 해시 충돌. 12,000개 연산 없이 오직 근처 벽만 판정합니다!
   let hitWall = false, bounceNx = 0, bounceNz = 0;
   let gridX = Math.floor(px / 50), gridZ = Math.floor(pz / 50);
+  
   for(let i = -1; i <= 1; i++) {
       for(let j = -1; j <= 1; j++) {
           let key = (gridX + i) + ',' + (gridZ + j);
@@ -272,39 +268,41 @@ function animateGame() {
       }
   }
 
-  // 💡 수학적 벽면 판정 (지름길 및 오프로드 마감)
+  // 충돌 튕김 및 게이지 삭감
+  if (hitWall) {
+      let vx = Math.sin(car.velocityAngle) * car.speed, vz = Math.cos(car.velocityAngle) * car.speed;
+      let dotProduct = vx * bounceNx + vz * bounceNz;
+      if (dotProduct < 0) {
+          vx -= 1.6 * dotProduct * bounceNx; vz -= 1.6 * dotProduct * bounceNz;
+          let impactSpeed = Math.abs(dotProduct);
+          car.speed = Math.sqrt(vx*vx + vz*vz) * 0.4; if (car.speed > 0.01) car.velocityAngle = Math.atan2(vx, vz);
+          car.driftState = 0; 
+          let gaugeLoss = impactSpeed * 30; 
+          car.gauge = Math.max(0, car.gauge - gaugeLoss); 
+          car.visualRoll += (Math.random() - 0.5) * 0.8; 
+          showTechAlert("💥 충돌! -" + Math.floor(gaugeLoss), "#e74c3c");
+      }
+  }
+  carMesh.position.x = px; carMesh.position.z = pz;
+
+  // 💡 잔디밭 감속 & 결승선 판정
   if (currentMap === 'village') {
       let finalDistSq = minDistTrack;
-      let finalClosestX = closestXx;
-      let finalClosestZ = closestZz;
-      let inShortcut = false;
-
       for (let seg of shortcutSegmentsWorld) {
           let A = px - seg.p1.x, B = pz - seg.p1.z, C = seg.p2.x - seg.p1.x, D = seg.p2.z - seg.p1.z;
           let dot = A*C + B*D, len_sq = C*C + D*D, param = (len_sq !== 0) ? dot / len_sq : -1;
           let xx, zz;
-          if (param < 0) { xx = seg.p1.x; zz = seg.p1.z; } else if (param > 1) { xx = seg.p2.x; zz = seg.p2.z; } else { xx = seg.p1.x + param*C; zz = seg.p1.z + param*D; }
+          if (param < 0) { xx = seg.p1.x; zz = seg.p1.z; } else if (param > 1) { xx = seg.p2.x; zz = p2.z; } else { xx = seg.p1.x + param*C; zz = p1.z + param*D; }
           let distSq = (px - xx)*(px - xx) + (pz - zz)*(pz - zz);
-          if (distSq < finalDistSq) { 
-              finalDistSq = distSq; finalClosestX = xx; finalClosestZ = zz; inShortcut = true; 
-          }
+          if (distSq < finalDistSq) { finalDistSq = distSq; }
       }
 
       let distTrack = Math.sqrt(finalDistSq);
       
-      // 오프로드
       if (distTrack > 38 && distTrack <= 48) { 
           if (car.speed > 1.2) car.speed *= 0.94; 
           if (car.speed < -0.5) car.speed *= 0.94;
           car.currentGrip = 0.03; 
-      }
-
-      // 벽 튕김 (지름길 내부에서도 48px 이상 벗어나면 튕기도록 완벽 수정)
-      if (distTrack > 48 && !inShortcut) {
-          let nx = (px - finalClosestX) / distTrack, nz = (pz - finalClosestZ) / distTrack;
-          px = finalClosestX + nx * 48; 
-          pz = finalClosestZ + nz * 48;
-          hitWall = true; bounceNx = nx; bounceNz = nz;
       }
       
       let distToHalf = Math.hypot(px - (-362), pz - (-12)); 
@@ -325,23 +323,6 @@ function animateGame() {
       }
   }
 
-  // 충돌 대미지 (게이지 삭감 및 튕김)
-  if (hitWall) {
-      let vx = Math.sin(car.velocityAngle) * car.speed, vz = Math.cos(car.velocityAngle) * car.speed;
-      let dotProduct = vx * bounceNx + vz * bounceNz;
-      if (dotProduct < 0) {
-          vx -= 1.6 * dotProduct * bounceNx; vz -= 1.6 * dotProduct * bounceNz;
-          let impactSpeed = Math.abs(dotProduct);
-          car.speed = Math.sqrt(vx*vx + vz*vz) * 0.4; if (car.speed > 0.01) car.velocityAngle = Math.atan2(vx, vz);
-          car.driftState = 0; 
-          let gaugeLoss = impactSpeed * 30; 
-          car.gauge = Math.max(0, car.gauge - gaugeLoss); 
-          car.visualRoll += (Math.random() - 0.5) * 0.8; 
-          showTechAlert("💥 충돌! -" + Math.floor(gaugeLoss), "#e74c3c");
-      }
-  }
-  carMesh.position.x = px; carMesh.position.z = pz;
-
   carMesh.rotation.y = car.angle;
   const springStiffness = 0.1; const damping = 0.85; 
   let clampedRollDiff = Math.max(-1.5, Math.min(1.5, angleDiff));
@@ -354,7 +335,6 @@ function animateGame() {
   car.pitchVelocity = (car.pitchVelocity + (targetPitch - car.visualPitch) * springStiffness) * damping; car.visualPitch += car.pitchVelocity;
   carMesh.bodyWrapper.rotation.x = car.visualPitch;
 
-  // 타이어 스키드 마크 (오브젝트 풀링 렌더링)
   if (Math.abs(angleDiff) > 0.08 && absSpeed > 0.5 && car.currentGrip < 0.12 && frameCount % 2 === 0) {
     const dirX = Math.sin(car.angle), dirZ = Math.cos(car.angle), rightX = Math.cos(car.angle), rightZ = -Math.sin(car.angle);
     let mL = skidPoolL[skidIdx];
