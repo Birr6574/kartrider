@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>3D 카트라이더 (하이퍼 최적화 & 풀 피지컬 통합본)</title>
+<style>
+  body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+  
+  /* --- 🎮 게임 내 UI --- */
+  #gameUI { display: none; }
+  #hud { position: absolute; top: 20px; left: 20px; color: white; background: rgba(0,0,0,0.65); padding: 15px 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10; }
+  .gauge-container { width: 250px; height: 20px; background: rgba(255,255,255,0.2); border: 2px solid white; margin-top: 10px; border-radius: 10px; overflow: hidden; }
+  #gauge { width: 0%; height: 100%; background: #3498db; transition: width 0.1s, background-color 0.2s; }
+  #gauge.maxed { background: #f1c40f; box-shadow: 0 0 10px #f1c40f; }
+  
+  #boosterSlots { display: flex; gap: 10px; margin-top: 10px; }
+  .slot { width: 50px; height: 15px; border: 2px solid white; border-radius: 8px; background: rgba(0,0,0,0.5); transition: all 0.2s; }
+  .slot.filled { background: #e74c3c; box-shadow: 0 0 10px #e74c3c; }
+  
+  #lapDisplay { position: absolute; top: 20px; right: 20px; color: white; background: rgba(0,0,0,0.65); padding: 15px 25px; border-radius: 12px; font-size: 24px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10; }
+  
+  .controls-info { position: absolute; bottom: 20px; left: 20px; color: rgba(255,255,255,0.9); font-size: 15px; background: rgba(0,0,0,0.65); padding: 10px 15px; border-radius: 8px; z-index: 10; }
+  #techAlert { 
+    position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 48px; color: #f1c40f; font-weight: 900; font-style: italic; 
+    opacity: 0; transition: opacity 0.2s; text-shadow: 0 0 20px #e67e22, 3px 3px 0px #d35400; 
+    z-index: 9999; pointer-events: none; text-align: center; line-height: 1.2;
+  }
+
+  /* --- ⏸️ 일시정지 (ESC) 메뉴 --- */
+  #pauseMenu {
+    display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  }
+  #pauseMenu h1 { color: white; font-size: 64px; font-style: italic; margin-bottom: 30px; text-shadow: 4px 4px 0 #3498db; }
+  .pause-btn {
+    padding: 15px 50px; font-size: 24px; font-weight: bold; color: white; background: #2c3e50; border: 3px solid white;
+    border-radius: 30px; cursor: pointer; transition: all 0.2s;
+  }
+  .pause-btn:hover { background: #3498db; transform: scale(1.05); }
+  .pause-btn.red { background: #c0392b; }
+  .pause-btn.red:hover { background: #e74c3c; }
+
+  /* --- 🏠 로비 UI --- */
+  #lobbyUI {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 50px; z-index: 100;
+    background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.15) 100%);
+  }
+  .lobby-title {
+    position: absolute; top: 50px; font-size: 64px; color: white; font-weight: 900; font-style: italic;
+    text-shadow: 4px 4px 0px #3498db, 8px 8px 15px rgba(0,0,0,0.5); letter-spacing: 2px;
+  }
+  .menu-container { display: flex; gap: 30px; margin-bottom: 40px; }
+  .menu-btn {
+    width: 140px; height: 140px; border-radius: 20px; border: 4px solid rgba(255,255,255,0.9);
+    background: rgba(44, 62, 80, 0.85); color: white; font-size: 20px; font-weight: bold; cursor: pointer; transition: all 0.2s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.3); backdrop-filter: blur(5px);
+  }
+  .menu-btn:hover { transform: translateY(-10px) scale(1.05); background: rgba(52, 152, 219, 0.95); border-color: white; box-shadow: 0 15px 25px rgba(52, 152, 219, 0.5); }
+  .menu-btn span { font-size: 40px; margin-bottom: 10px; }
+  #startBtn {
+    padding: 20px 80px; font-size: 32px; font-weight: 900; color: white; background: linear-gradient(135deg, #e74c3c, #c0392b);
+    border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 8px 0px #902b1f, 0 15px 20px rgba(0,0,0,0.4); transition: all 0.1s; letter-spacing: 2px;
+  }
+  #startBtn:active { transform: translateY(8px); box-shadow: 0 0px 0px #902b1f, 0 5px 10px rgba(0,0,0,0.4); }
+
+  /* --- 👤 모달 공통 UI --- */
+  .modal-overlay {
+    display: none; position: absolute; top: 50%; right: 50px; transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 30px; border-radius: 20px;
+    box-shadow: -10px 10px 30px rgba(0,0,0,0.3); text-align: center; z-index: 200; flex-direction: column; gap: 15px; width: 280px; border: 3px solid #eee;
+  }
+  .modal-overlay h2 { margin: 0; color: #2c3e50; font-size: 26px; }
+  .list-container { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+  .item-btn { padding: 15px; font-size: 20px; font-weight: bold; color: white; border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+  .item-btn:hover { transform: scale(1.05) translateX(-5px); }
+  .close-modal { margin-top: 15px; padding: 12px; font-size: 18px; font-weight: bold; background: #2ecc71; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 0 #27ae60; transition: transform 0.1s; }
+  .close-modal:active { transform: translateY(4px); box-shadow: 0 0px 0 #27ae60; }
+  
+  /* 테마 컬러 */
+  .c-dao { background: #1565c0; box-shadow: 0 4px 0 #0d47a1; } .c-bazzi { background: #e74c3c; box-shadow: 0 4px 0 #c0392b; } .c-dizzy { background: #f1c40f; color: #333; box-shadow: 0 4px 0 #f39c12; }
+  .m-vil { background: #27ae60; box-shadow: 0 4px 0 #1e8449; } .m-test { background: #95a5a6; box-shadow: 0 4px 0 #7f8c8d; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<div id="lobbyUI">
+  <div class="lobby-title">3D KART RIDER</div>
+  <div class="menu-container">
+    <button class="menu-btn" onclick="openModal('mapModal')"><span>🗺️</span>맵 선택</button>
+    <button class="menu-btn" onclick="openModal('charModal')"><span>👤</span>캐릭터</button>
+    <button class="menu-btn" onclick="alert('카트 선택 기능은 준비 중입니다!')"><span>🏎️</span>카트 바디</button>
+    <button class="menu-btn" onclick="alert('설정 기능은 준비 중입니다!')"><span>⚙️</span>설정</button>
+  </div>
+  <button id="startBtn">GAME START</button>
+</div>
+
+<div id="charModal" class="modal-overlay">
+  <h2>레이서 선택</h2>
+  <div class="list-container">
+    <button class="item-btn c-dao" onclick="previewCharacter('dao')">다오 (Dao)</button>
+    <button class="item-btn c-bazzi" onclick="previewCharacter('bazzi')">배찌 (Bazzi)</button>
+    <button class="item-btn c-dizzy" onclick="previewCharacter('dizzy')">디지니 (Dizzy)</button>
+  </div>
+  <button class="close-modal" onclick="closeModal('charModal')">완료</button>
+</div>
+
+<div id="mapModal" class="modal-overlay">
+  <h2>트랙 선택</h2>
+  <div class="list-container">
+    <button class="item-btn m-vil" onclick="selectMap('village')">빌리지 손가락</button>
+    <button class="item-btn m-test" onclick="selectMap('test')">테스트 구장 (운동장)</button>
+  </div>
+  <button class="close-modal" onclick="closeModal('mapModal')">완료</button>
+</div>
+
+<div id="gameUI">
+  <div id="lapDisplay">LAP: <span id="lapCount">1</span> / 3</div>
+  <div id="hud">
+    <h2 style="margin:0; text-shadow: none;">속도: <span id="speedDisplay">0</span> km/h</h2>
+    <div class="gauge-container"><div id="gauge"></div></div>
+    <div id="boosterSlots">
+      <div class="slot" id="slot1"></div><div class="slot" id="slot2"></div>
+    </div>
+    <p id="boostStatus" style="font-weight:bold; color:white; margin-top: 8px; text-shadow: none;">드리프트(Shift)로 부스터를 모으세요</p>
+  </div>
+  <div id="techAlert"></div>
+  <div class="controls-info">
+    <strong>[방향키]</strong> 이동 &nbsp;|&nbsp; <strong>[Shift]</strong> 드리프트 (방향 유지 연타 시 더블 드리프트!) &nbsp;|&nbsp; <strong>[Ctrl]</strong> 부스터 &nbsp;|&nbsp; <strong style="color:#2ecc71;">[R]</strong> 리셋 &nbsp;|&nbsp; <strong style="color:#f1c40f;">[ESC]</strong> 메뉴
+  </div>
+</div>
+
+<div id="pauseMenu">
+  <h1>PAUSED</h1>
+  <button class="pause-btn" onclick="resumeGame()">계속 주행하기</button>
+  <button class="pause-btn red" onclick="exitToLobby()">홈으로 나가기</button>
+</div>
+
+<script>
+// ==========================================
+// 1. 전역 변수 및 Three.js 초기화
+// ==========================================
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+document.body.appendChild(renderer.domElement);
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.85); scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+dirLight.position.set(50, 100, 50); dirLight.castShadow = true;
+dirLight.shadow.camera.top = 500; dirLight.shadow.camera.bottom = -500; dirLight.shadow.camera.left = -500; dirLight.shadow.camera.right = 500;
+dirLight.shadow.mapSize.width = 2048; dirLight.shadow.mapSize.height = 2048;
+scene.add(dirLight);
+
+const mapGroup = new THREE.Group();
+scene.add(mapGroup);
+
+// 💡 공간 분할 (Spatial Hashing) 그리드 및 OBB 콜라이더 (기둥 등 소수 물체용)
+const colliderGrid = new Map();
+const boxColliders = [];
+function addBoxCollider(x, z, w, d, rotY) {
+    let box = {x, z, w, d, rot: rotY};
+    let cx = Math.floor(x / 50), cz = Math.floor(z / 50);
+    let key = cx + ',' + cz;
+    if(!colliderGrid.has(key)) colliderGrid.set(key, []);
+    colliderGrid.get(key).push(box);
+    boxColliders.push(box);
+}
+
+const mapToWorld = (cx, cz) => ({ x: (cx / 2048) * 1024 - 512, z: (cz / 2048) * 1024 - 512 });
+
+let currentMap = 'village';
+let isGameRunning = false; 
+let lobbyAnimId; 
+let isPaused = false;
+let carMesh;
+let frameCount = 0;
+let frontWheelL, frontWheelR; 
+
+// 💡 스키드 마크 (오브젝트 풀링용)
+const sharedSkidMat = new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.5, depthWrite: false });
+const skidMarks = []; 
+const skidGeom = new THREE.PlaneGeometry(0.6, 1.0);
+const MAX_SKIDS = 100;
+const skidPoolL = []; const skidPoolR = [];
+let skidIdx = 0;
+
+for(let i=0; i<MAX_SKIDS; i++) {
+    let mL = new THREE.Mesh(skidGeom, sharedSkidMat); mL.visible = false; scene.add(mL); skidPoolL.push(mL);
+    let mR = new THREE.Mesh(skidGeom, sharedSkidMat); mR.visible = false; scene.add(mR); skidPoolR.push(mR);
+}
+
+const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Shift: false, Control: false, r: false, R: false };
+
+const MAX_NORMAL = 130 / 60; const MAX_INSTANT = 154 / 60; const MAX_BOOST = 220 / 60; const MAX_REVERSE = -100 / 60; 
+
+const car = {
+  speed: 0, accel: 0.02, boostAccel: 0.06, instantAccel: 0.035, turnSpeed: 0.045, driftTurnSpeed: 0.08, 
+  grip: 0.18, driftGrip: 0.025, currentGrip: 0.18, angle: 0, velocityAngle: 0, gauge: 0, boosterCount: 0, maxBoosters: 2,
+  isBoosting: false, boostTime: 0, driftState: 0, boostsGainedThisDrift: 0, lastAngleDiff: 0, 
+  wasDrifting: false, instantBoostWindow: 0, canTriggerInstant: false, isInstantBoosting: false, instantBoostTimer: 0, toktokiTimer: 0,
+  visualRoll: 0, rollVelocity: 0, visualPitch: 0, pitchVelocity: 0, steerAngle: 0,
+  lap: 1, checkPoint: false, isFinished: false,
+  shiftReleaseTime: 0, isDoubleDrifting: false, doubleDriftTimer: 0, driftStartDir: 0
+};
+
+const cameraLookTarget = new THREE.Vector3();
+
+// DOM 요소 캐싱
+const uiSpeed = document.getElementById('speedDisplay');
+const uiGauge = document.getElementById('gauge');
+const uiSlot1 = document.getElementById('slot1');
+const uiSlot2 = document.getElementById('slot2');
+const uiBoostStatus = document.getElementById('boostStatus');
+const uiLapCount = document.getElementById('lapCount');
+
+
+// ==========================================
+// 2. 맵 렌더링 & 스마트 돌담 (렉 0% 최적화 적용)
+// ==========================================
+const trackPointsCanvas = [
+    [1400, 1750], [400, 1750], [400, 1500], [1500, 1500], [1500, 1250], 
+    [300, 1250], [300, 1000], [1500, 1000], [1500, 750], [400, 750], 
+    [400, 500], [900, 500], [900, 150], [1700, 150], 
+    [1700, 900], [1900, 900], [1900, 1750], [1400, 1750]
+];
+const trackPointsWorld = trackPointsCanvas.map(p => mapToWorld(p[0], p[1]));
+
+const shortcutSegmentsWorld = [
+    { p1: mapToWorld(1200, 1500), p2: mapToWorld(1200, 1250) },
+    { p1: mapToWorld(600, 1250), p2: mapToWorld(600, 1000) }
+];
+
+function inShortcutZone(x, z) {
+    if (Math.abs(x - 88) < 45 && z > 90 && z < 260) return true;
+    if (Math.abs(x - -212) < 45 && z > -40 && z < 140) return true;
+    return false;
+}
+
+function createMapTexture() {
+    const canvas = document.createElement('canvas'); canvas.width = 2048; canvas.height = 2048; const ctx = canvas.getContext('2d');
+    
+    ctx.fillStyle = '#6ab04c'; ctx.fillRect(0, 0, 2048, 2048);
+    ctx.fillStyle = '#3498db'; ctx.fillRect(750, 50, 1050, 550);
+
+    ctx.lineWidth = 100; ctx.strokeStyle = '#e67e22'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(1200, 1500); ctx.lineTo(1200, 1250); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(600, 1250); ctx.lineTo(600, 1000); ctx.stroke();
+
+    ctx.beginPath(); ctx.moveTo(trackPointsCanvas[0][0], trackPointsCanvas[0][1]);
+    for(let i=1; i<trackPointsCanvas.length; i++) ctx.lineTo(trackPointsCanvas[i][0], trackPointsCanvas[i][1]);
+    ctx.closePath();
+    
+    ctx.lineWidth = 180; ctx.strokeStyle = '#e74c3c'; ctx.stroke();
+    ctx.setLineDash([40, 40]); ctx.strokeStyle = '#ecf0f1'; ctx.stroke(); ctx.setLineDash([]);
+    ctx.lineWidth = 150; ctx.strokeStyle = '#7f8c8d'; ctx.stroke();
+    ctx.lineWidth = 6; ctx.setLineDash([30, 30]); ctx.strokeStyle = '#f1c40f'; ctx.stroke(); ctx.setLineDash([]);
+    
+    ctx.lineWidth = 150; ctx.strokeStyle = '#8B4513'; 
+    ctx.beginPath(); ctx.moveTo(900, 500); ctx.lineTo(900, 150); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(900, 150); ctx.lineTo(1700, 150); ctx.stroke();
+    ctx.lineWidth = 4; ctx.strokeStyle = '#5C4033'; 
+    for(let y=150; y<=500; y+=20) { ctx.beginPath(); ctx.moveTo(825, y); ctx.lineTo(975, y); ctx.stroke(); }
+    for(let x=900; x<=1700; x+=20) { ctx.beginPath(); ctx.moveTo(x, 75); ctx.lineTo(x, 225); ctx.stroke(); }
+    
+    ctx.save(); ctx.translate(1400, 1750);
+    for(let i = -15; i <= 15; i += 15) {
+        for(let j = -75; j <= 75; j += 15) {
+            ctx.fillStyle = (Math.abs(i/15 + j/15) % 2 === 0) ? '#111111' : '#ffffff';
+            ctx.fillRect(i, j, 15, 15);
+        }
+    }
+    ctx.restore();
+    const texture = new THREE.CanvasTexture(canvas); texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping; texture.anisotropy = 16;
+    return texture;
+}
+
+// 💡 [블랙스크린 해결] 그림자 연산을 끄고 형태만 그리는 스마트 돌담 (물리연산은 배제함)
+function buildSmartWalls() {
+    const R = 48; const step = 2.5; const rawPoints = [];
+    for (let i = 0; i < trackPointsWorld.length - 1; i++) {
+        let p1 = trackPointsWorld[i], p2 = trackPointsWorld[i+1];
+        let dx = p2.x - p1.x, dz = p2.z - p1.z;
+        let len = Math.hypot(dx, dz); let nx = dz / len, nz = -dx / len;
+        for (let d = 0; d <= len; d += step) {
+            let cx = p1.x + dx * d / len, cz = p1.z + dz * d / len;
+            rawPoints.push({x: cx + nx * R, z: cz + nz * R}); rawPoints.push({x: cx - nx * R, z: cz - nz * R});
+        }
+        for (let a = 0; a < Math.PI * 2; a += step / R) {
+            rawPoints.push({x: p1.x + Math.cos(a) * R, z: p1.z + Math.sin(a) * R});
+            rawPoints.push({x: p2.x + Math.cos(a) * R, z: p2.z + Math.sin(a) * R});
+        }
+    }
+    
+    const validPoints = rawPoints.filter(pt => {
+        let minDist = Infinity;
+        for (let i = 0; i < trackPointsWorld.length - 1; i++) {
+            let p1 = trackPointsWorld[i], p2 = trackPointsWorld[i+1];
+            let A = pt.x - p1.x, B = pt.z - p1.z, C = p2.x - p1.x, D = p2.z - p1.z;
+            let dot = A * C + B * D, len_sq = C * C + D * D, param = (len_sq !== 0) ? dot / len_sq : -1;
+            let xx, zz;
+            if (param < 0) { xx = p1.x; zz = p1.z; } else if (param > 1) { xx = p2.x; zz = p2.z; } else { xx = p1.x + param * C; zz = p1.z + param * D; }
+            let distSq = (pt.x - xx)*(pt.x - xx) + (pt.z - zz)*(pt.z - zz);
+            if (distSq < minDist) minDist = distSq;
+        }
+        if (Math.sqrt(minDist) < R - 0.5) return false;
+        if (inShortcutZone(pt.x, pt.z)) return false; 
+        return true;
+    });
+
+    const WALL_H = 18; const TOP_H = 4;
+    // GPU 최적화: 8각 실린더를 5각으로 낮춤
+    const baseGeom = new THREE.CylinderGeometry(1.8, 1.8, WALL_H, 5); const topGeom = new THREE.CylinderGeometry(2.0, 2.0, TOP_H, 5);
+    const baseMat = new THREE.MeshLambertMaterial({color: 0x95a5a6}); const topMat = new THREE.MeshLambertMaterial({color: 0x27ae60});
+    const baseInst = new THREE.InstancedMesh(baseGeom, baseMat, validPoints.length); const topInst = new THREE.InstancedMesh(topGeom, topMat, validPoints.length);
+    const dummy = new THREE.Object3D();
+    
+    validPoints.forEach((pt, idx) => {
+        dummy.position.set(pt.x, WALL_H / 2, pt.z); dummy.updateMatrix(); baseInst.setMatrixAt(idx, dummy.matrix);
+        dummy.position.set(pt.x, WALL_H + TOP_H / 2, pt.z); dummy.updateMatrix(); topInst.setMatrixAt(idx, dummy.matrix);
+        // 🚨 addBoxCollider 삭제!! (물리 연산은 아래 수학 공식이 알아서 합니다)
+    });
+    
+    baseInst.instanceMatrix.needsUpdate = true;
+    topInst.instanceMatrix.needsUpdate = true;
+    
+    // 그림자 연산 끄기 (블랙스크린 방지)
+    baseInst.castShadow = false; topInst.castShadow = false; 
+    baseInst.receiveShadow = false; topInst.receiveShadow = false;
+
+    mapGroup.add(baseInst); mapGroup.add(topInst);
+}
+
+function createTree(x, z) {
+    const group = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 10), new THREE.MeshLambertMaterial({color: 0x795548}));
+    trunk.position.y = 5; trunk.castShadow = true; group.add(trunk);
+    const leaves = new THREE.Mesh(new THREE.SphereGeometry(12, 8, 8), new THREE.MeshLambertMaterial({color: 0x27ae60}));
+    leaves.position.y = 15; leaves.castShadow = true; group.add(leaves);
+    group.position.set(x, 0, z); mapGroup.add(group);
+}
+
+function createHouse(x, z, rotY) {
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(30, 20, 30), new THREE.MeshLambertMaterial({color: 0xffeaa7}));
+    body.position.y = 10; body.castShadow = true; group.add(body);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(24, 15, 4), new THREE.MeshLambertMaterial({color: 0xd35400}));
+    roof.position.y = 27.5; roof.rotation.y = Math.PI / 4; roof.castShadow = true; group.add(roof);
+    group.position.set(x, 0, z); group.rotation.y = rotY; mapGroup.add(group);
+}
+
+function createClockTower(x, z) {
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(20, 50, 20), new THREE.MeshLambertMaterial({color: 0xecf0f1}));
+    body.position.y = 25; body.castShadow = true; group.add(body);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(18, 20, 4), new THREE.MeshLambertMaterial({color: 0x2980b9}));
+    roof.position.y = 60; roof.rotation.y = Math.PI / 4; roof.castShadow = true; group.add(roof);
+    const clock = new THREE.Mesh(new THREE.CircleGeometry(6, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
+    clock.position.set(0, 40, 10.1); group.add(clock);
+    group.position.set(x, 0, z); mapGroup.add(group);
+}
+
+function createStartBanner(x, z, rotY) {
+    const group = new THREE.Group(); const mat = new THREE.MeshLambertMaterial({color: 0x2c3e50});
+    const p1 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p1.position.set(0, 17.5, -60); p1.castShadow = true; group.add(p1);
+    const p2 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p2.position.set(0, 17.5, 60); p2.castShadow = true; group.add(p2);
+    
+    // 오직 시작 배너 기둥만 물리 충돌 객체로 등록!
+    let sin = Math.sin(rotY), cos = Math.cos(rotY);
+    addBoxCollider(x + (-60)*(-sin), z + (-60)*cos, 4, 4, rotY);
+    addBoxCollider(x + (60)*(-sin), z + (60)*cos, 4, 4, rotY);
+
+    const topBox = new THREE.Mesh(new THREE.BoxGeometry(4, 12, 124), new THREE.MeshLambertMaterial({color: 0x3498db})); 
+    topBox.position.set(0, 35, 0); topBox.castShadow = true; group.add(topBox);
+
+    const bannerCanvas = document.createElement('canvas'); bannerCanvas.width = 1024; bannerCanvas.height = 128;
+    const bCtx = bannerCanvas.getContext('2d'); bCtx.fillStyle = '#2980b9'; bCtx.fillRect(0, 0, 1024, 128);
+    bCtx.fillStyle = '#ffffff'; bCtx.font = 'bold 70px sans-serif'; bCtx.textAlign = 'center'; bCtx.textBaseline = 'middle';
+    bCtx.fillText('🏁 FINISH LINE 🏁', 512, 64);
+    const planeMat = new THREE.MeshBasicMaterial({map: new THREE.CanvasTexture(bannerCanvas), transparent: true});
+    
+    const b1 = new THREE.Mesh(new THREE.PlaneGeometry(124, 12), planeMat); b1.position.set(2.1, 35, 0); b1.rotation.y = Math.PI / 2; group.add(b1);
+    const b2 = new THREE.Mesh(new THREE.PlaneGeometry(124, 12), planeMat); b2.position.set(-2.1, 35, 0); b2.rotation.y = -Math.PI / 2; group.add(b2);
+
+    group.position.set(x, 0, z); group.rotation.y = rotY; mapGroup.add(group);
+}
+
+function loadMap(mapName) {
+    currentMap = mapName;
+    while(mapGroup.children.length > 0) { mapGroup.remove(mapGroup.children[0]); }
+    colliderGrid.clear(); boxColliders.length = 0; 
+
+    if (mapName === 'village') {
+        scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.Fog(0x87CEEB, 200, 900);
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(1024, 1024), new THREE.MeshLambertMaterial({map: createMapTexture()}));
+        plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; mapGroup.add(plane);
+        
+        const start = mapToWorld(1400, 1750); createStartBanner(start.x, start.z, 0); 
+        buildSmartWalls(); // 시각적 벽 로드
+        
+        for(let z = 400; z <= 1800; z += 300) { let p = mapToWorld(200, z); createHouse(p.x, p.z, Math.PI/2); }
+        let towerP = mapToWorld(1760, 680); createClockTower(towerP.x, towerP.z);
+        let treeP = mapToWorld(1400, 600); createTree(treeP.x, treeP.z);
+        
+    } else if (mapName === 'test') {
+        scene.background = new THREE.Color(0xe0e5ec); scene.fog = new THREE.Fog(0xe0e5ec, 100, 600);
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(10000, 10000), new THREE.MeshLambertMaterial({color: 0xffffff}));
+        plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; mapGroup.add(plane);
+        const gridHelper = new THREE.GridHelper(10000, 500, 0xcccccc, 0xe0e0e0); mapGroup.add(gridHelper);
+    }
+}
+
+// ==========================================
+// 3. 캐릭터 & 카트 모델링
+// ==========================================
+function createCharacterModel(type) {
+    const group = new THREE.Group();
+    let mainColor = 0x1565c0; if(type === 'bazzi') mainColor = 0xe74c3c; if(type === 'dizzy') mainColor = 0xf1c40f;
+    const headGroup = new THREE.Group(); headGroup.position.y = 2.0; 
+    const headMat = new THREE.MeshLambertMaterial({color: mainColor});
+    const centerMesh = new THREE.Mesh(new THREE.SphereGeometry(1.3, 32, 32), headMat); centerMesh.castShadow = true; headGroup.add(centerMesh);
+    
+    if (type === 'dao' || !type) {
+        const lobeGeom = new THREE.SphereGeometry(0.95, 32, 32); 
+        const lobeL = new THREE.Mesh(lobeGeom, headMat); lobeL.position.set(-0.8, 0, 0); lobeL.castShadow = true; headGroup.add(lobeL);
+        const lobeR = new THREE.Mesh(lobeGeom, headMat); lobeR.position.set(0.8, 0, 0); lobeR.castShadow = true; headGroup.add(lobeR);
+    } else if (type === 'bazzi') {
+        const earGeom = new THREE.SphereGeometry(0.45, 16, 16);
+        const earL = new THREE.Mesh(earGeom, headMat); earL.position.set(-0.75, 1.1, 0); earL.castShadow = true; headGroup.add(earL);
+        const earR = new THREE.Mesh(earGeom, headMat); earR.position.set(0.75, 1.1, 0); earR.castShadow = true; headGroup.add(earR);
+    } else if (type === 'dizzy') {
+        const podGeom = new THREE.SphereGeometry(0.55, 32, 32); const ringGeom = new THREE.TorusGeometry(0.55, 0.12, 16, 32); const ringMat = new THREE.MeshLambertMaterial({color: 0xcccccc}); 
+        const podL = new THREE.Mesh(podGeom, headMat); podL.position.set(-0.85, 0.9, -0.6); podL.castShadow = true; headGroup.add(podL);
+        const ringL = new THREE.Mesh(ringGeom, ringMat); ringL.position.copy(podL.position); ringL.lookAt(0, 0, 0); headGroup.add(ringL);
+        const podR = new THREE.Mesh(podGeom, headMat); podR.position.set(0.85, 0.9, -0.6); podR.castShadow = true; headGroup.add(podR);
+        const ringR = new THREE.Mesh(ringGeom, ringMat); ringR.position.copy(podR.position); ringR.lookAt(0, 0, 0); headGroup.add(ringR);
+    }
+    
+    group.add(headGroup);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 1.2, 16), new THREE.MeshLambertMaterial({color: mainColor}));
+    body.position.y = 0.6; body.castShadow = true; group.add(body);
+    group.scale.set(1.5, 1.5, 1.5); return group;
+}
+
+function createKart() {
+  const kartRoot = new THREE.Group(); const kartBody = new THREE.Group(); kartRoot.add(kartBody);
+  const whiteMat = new THREE.MeshLambertMaterial({color: 0xf5f6fa}); const blueMat = new THREE.MeshLambertMaterial({color: 0x3498db});
+  const darkMat = new THREE.MeshLambertMaterial({color: 0x2c3e50}); const blackMat = new THREE.MeshLambertMaterial({color: 0x111111});
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.5, 5.0), darkMat); chassis.position.y = 0.5; chassis.castShadow = true; kartBody.add(chassis);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 1.5), whiteMat); nose.position.set(0, 0.6, 2.8); nose.castShadow = true; kartBody.add(nose);
+  const noseAccent = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.6, 1.8), blueMat); noseAccent.position.set(0, 0.9, 2.3); noseAccent.rotation.x = Math.PI / 12; noseAccent.castShadow = true; kartBody.add(noseAccent);
+  const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 3.2), whiteMat); sideL.position.set(-1.4, 0.7, 0.5); sideL.castShadow = true; kartBody.add(sideL);
+  const sideR = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 3.2), whiteMat); sideR.position.set(1.4, 0.7, 0.5); sideR.castShadow = true; kartBody.add(sideR);
+  const engine = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 1.6), darkMat); engine.position.set(0, 1.1, -1.8); engine.castShadow = true; kartBody.add(engine);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.6, 0.4), darkMat); seat.position.set(0, 1.5, -0.9); seat.rotation.x = -Math.PI / 16; seat.castShadow = true; kartBody.add(seat);
+  const steerColumn = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.2), darkMat); steerColumn.position.set(0, 1.4, 1.4); steerColumn.rotation.x = Math.PI / 4; kartBody.add(steerColumn);
+  const steerWheel = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.1, 8, 24), blackMat); steerWheel.position.set(0, 1.8, 1.0); steerWheel.rotation.x = Math.PI / 4; kartBody.add(steerWheel);
+  const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.2, 1.2), blueMat); spoilerWing.position.set(0, 2.5, -2.8); spoilerWing.castShadow = true; kartBody.add(spoilerWing);
+  const supportL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.8), whiteMat); supportL.position.set(-1.2, 1.9, -2.5); supportL.castShadow = true; kartBody.add(supportL);
+  const supportR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.8), whiteMat); supportR.position.set(1.2, 1.9, -2.5); supportR.castShadow = true; kartBody.add(supportR);
+  kartRoot.charSlot = new THREE.Group(); kartRoot.charSlot.position.set(0, 1.6, -0.2); kartBody.add(kartRoot.charSlot);
+
+  const wheelGeom = new THREE.CylinderGeometry(0.8, 0.8, 0.8, 24); wheelGeom.rotateZ(Math.PI / 2); 
+  frontWheelL = new THREE.Group(); frontWheelL.position.set(-2.0, 0.8, 2.5); const fwlMesh = new THREE.Mesh(wheelGeom, blackMat); fwlMesh.castShadow = true; frontWheelL.add(fwlMesh); kartBody.add(frontWheelL);
+  frontWheelR = new THREE.Group(); frontWheelR.position.set(2.0, 0.8, 2.5); const fwrMesh = new THREE.Mesh(wheelGeom, blackMat); fwrMesh.castShadow = true; frontWheelR.add(fwrMesh); kartBody.add(frontWheelR);
+  const backWheelL = new THREE.Mesh(wheelGeom, blackMat); backWheelL.position.set(-2.0, 0.8, -2); backWheelL.castShadow = true; kartBody.add(backWheelL);
+  const backWheelR = new THREE.Mesh(wheelGeom, blackMat); backWheelR.position.set(2.0, 0.8, -2); backWheelR.castShadow = true; kartBody.add(backWheelR);
+
+  const exhaustGeom = new THREE.CylinderGeometry(0.3, 0.3, 0.5, 12); exhaustGeom.rotateX(Math.PI / 2); const exhaustMat = new THREE.MeshLambertMaterial({color: 0x7f8c8d});
+  const ex1 = new THREE.Mesh(exhaustGeom, exhaustMat); ex1.position.set(-0.8, 0.8, -2.8); kartBody.add(ex1);
+  const ex2 = new THREE.Mesh(exhaustGeom, exhaustMat); ex2.position.set(0.8, 0.8, -2.8); kartBody.add(ex2);
+
+  const fireGeom = new THREE.ConeGeometry(0.6, 3.0, 12); fireGeom.rotateX(-Math.PI / 2); const fireMat = new THREE.MeshBasicMaterial({color: 0x3498db}); 
+  kartRoot.fire1 = new THREE.Mesh(fireGeom, fireMat); kartRoot.fire1.position.set(-0.8, 0.8, -4.2); kartRoot.fire1.visible = false; kartBody.add(kartRoot.fire1);
+  kartRoot.fire2 = new THREE.Mesh(fireGeom, fireMat); kartRoot.fire2.position.set(0.8, 0.8, -4.2); kartRoot.fire2.visible = false; kartBody.add(kartRoot.fire2);
+  
+  const fakeShadow = new THREE.Mesh(new THREE.CircleGeometry(4.5, 32).rotateX(-Math.PI / 2).scale(1, 1, 1.8), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false }));
+  fakeShadow.position.y = 0.05; kartRoot.add(fakeShadow);
+  kartRoot.bodyWrapper = kartBody; return kartRoot;
+}
+
+function changeCharacter(type) { 
+    carMesh.charSlot.clear(); 
+    carMesh.charSlot.add(createCharacterModel(type)); 
+}
+
+// 💡 초기화 로직
+carMesh = createKart(); scene.add(carMesh); changeCharacter('dizzy'); loadMap('village'); 
+
+function animateLobby() {
+    if (isGameRunning) return;
+    lobbyAnimId = requestAnimationFrame(animateLobby);
+    carMesh.rotation.y -= 0.01; renderer.render(scene, camera);
+}
+camera.position.set(13, 10, 18); camera.lookAt(new THREE.Vector3(0, 3, 0));
+animateLobby();
+
+// 💡 UI 함수들
+function showTechAlert(text, color, duration = 800) {
+  const el = document.getElementById('techAlert');
+  el.innerHTML = text; el.style.color = color; el.style.opacity = 1;
+  if(el.timeout) clearTimeout(el.timeout);
+  el.timeout = setTimeout(() => { el.style.opacity = 0; }, duration);
+}
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function previewCharacter(type) { changeCharacter(type); }
+function selectMap(type) { loadMap(type); showTechAlert(type === 'village' ? '빌리지 손가락 선택됨!' : '테스트 구장 선택됨!', '#2ecc71'); }
+function resumeGame() { isPaused = false; document.getElementById('pauseMenu').style.display = 'none'; }
+function exitToLobby() {
+    isPaused = false; isGameRunning = false; car.isFinished = false;
+    document.getElementById('pauseMenu').style.display = 'none'; document.getElementById('gameUI').style.display = 'none';
+    document.getElementById('lobbyUI').style.display = 'flex'; animateLobby();
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight); if (!isGameRunning) renderer.render(scene, camera);
+});
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  document.getElementById('lobbyUI').style.display = 'none'; document.getElementById('gameUI').style.display = 'block';
+  document.getElementById('charModal').style.display = 'none'; document.getElementById('mapModal').style.display = 'none';
+  document.activeElement.blur(); 
+  
+  car.lap = 1; car.checkPoint = false; car.isFinished = false;
+  car.speed = 0; car.gauge = 0; car.boosterCount = 0; car.driftState = 0; car.isDoubleDrifting = false; car.lastDriftDir = 0;
+  uiLapCount.innerText = car.lap;
+  if(currentMap !== 'village') document.getElementById('lapDisplay').style.display = 'none';
+  else document.getElementById('lapDisplay').style.display = 'block';
+
+  for(let i=0; i<MAX_SKIDS; i++) { skidPoolL[i].visible = false; skidPoolR[i].visible = false; }
+  isGameRunning = true; cancelAnimationFrame(lobbyAnimId);
+  
+  if (currentMap === 'village') {
+      car.angle = -Math.PI / 2; car.velocityAngle = -Math.PI / 2; carMesh.rotation.y = -Math.PI / 2;
+      const startPos = mapToWorld(1400, 1750); carMesh.position.set(startPos.x, 0, startPos.z);
+      camera.position.set(carMesh.position.x + 24, 20, carMesh.position.z); camera.lookAt(carMesh.position);
+  } else {
+      car.angle = 0; car.velocityAngle = 0; carMesh.rotation.y = 0;
+      carMesh.position.set(0, 0, 0); camera.position.set(0, 20, -24); camera.lookAt(carMesh.position);
+  }
+  animateGame(); 
+});
