@@ -1,6 +1,4 @@
-// 🗺️ 맵 좌표 데이터
-const mapToWorld = (cx, cz) => ({ x: (cx / 2048) * 1024 - 512, z: (cz / 2048) * 1024 - 512 });
-
+// 🗺️ 맵 좌표 데이터 (globals.js의 mapToWorld 함수를 그대로 가져다 씁니다)
 const trackPointsCanvas = [
     [1400, 1750], [400, 1750], [400, 1500], [1500, 1500], [1500, 1250], 
     [300, 1250], [300, 1000], [1500, 1000], [1500, 750], [400, 750], 
@@ -24,7 +22,7 @@ function createMapTexture() {
     const canvas = document.createElement('canvas'); canvas.width = 2048; canvas.height = 2048; const ctx = canvas.getContext('2d');
     
     ctx.fillStyle = '#6ab04c'; ctx.fillRect(0, 0, 2048, 2048);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(750, 50, 1050, 550);
+    ctx.fillStyle = '#3498db'; ctx.fillRect(750, 50, 1050, 550); // 강물
 
     ctx.lineWidth = 100; ctx.strokeStyle = '#e67e22'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(1200, 1500); ctx.lineTo(1200, 1250); ctx.stroke();
@@ -58,7 +56,7 @@ function createMapTexture() {
     return texture;
 }
 
-// 💡 블랙스크린 100% 해결! (그림자 연산 제거 및 폴리곤 다이어트)
+// 💡 [시각 최적화] 렉의 주범이었던 그림자를 끄고 도형 폴리곤을 줄였습니다!
 function buildSmartWalls() {
     const R = 48; const step = 2.5; const rawPoints = [];
     for (let i = 0; i < trackPointsWorld.length - 1; i++) {
@@ -74,6 +72,7 @@ function buildSmartWalls() {
             rawPoints.push({x: p2.x + Math.cos(a) * R, z: p2.z + Math.sin(a) * R});
         }
     }
+    
     const validPoints = rawPoints.filter(pt => {
         let minDist = Infinity;
         for (let i = 0; i < trackPointsWorld.length - 1; i++) {
@@ -104,13 +103,10 @@ function buildSmartWalls() {
     validPoints.forEach((pt, idx) => {
         dummy.position.set(pt.x, WALL_H / 2, pt.z); dummy.updateMatrix(); baseInst.setMatrixAt(idx, dummy.matrix);
         dummy.position.set(pt.x, WALL_H + TOP_H / 2, pt.z); dummy.updateMatrix(); topInst.setMatrixAt(idx, dummy.matrix);
-        addBoxCollider(pt.x, pt.z, 3.6, 3.6, 0); // OBB 물리엔진 등록 유지!
+        // 🚨 렉 방지! addBoxCollider는 쓰지 않습니다. (충돌은 main.js의 수학 벡터로만 계산)
     });
     
-    baseInst.instanceMatrix.needsUpdate = true;
-    topInst.instanceMatrix.needsUpdate = true;
-    
-    // 🚨 블랙스크린 해결의 핵심! 1만개 도형의 무거운 그림자 끄기
+    // 🚨 렉 해결의 알파이자 오메가! 12,000개 도형의 그림자 끄기
     baseInst.castShadow = false; topInst.castShadow = false; 
     baseInst.receiveShadow = false; topInst.receiveShadow = false;
 
@@ -149,6 +145,7 @@ function createStartBanner(x, z, rotY) {
     const p1 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p1.position.set(0, 17.5, -60); p1.castShadow = true; group.add(p1);
     const p2 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p2.position.set(0, 17.5, 60); p2.castShadow = true; group.add(p2);
     
+    // 오직 시작 배너 기둥 2개만 3D 물리박스(OBB)로 등록합니다.
     let sin = Math.sin(rotY), cos = Math.cos(rotY);
     addBoxCollider(x + (-60)*(-sin), z + (-60)*cos, 4, 4, rotY);
     addBoxCollider(x + (60)*(-sin), z + (60)*cos, 4, 4, rotY);
@@ -179,7 +176,7 @@ function loadMap(mapName) {
         plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; mapGroup.add(plane);
         
         const start = mapToWorld(1400, 1750); createStartBanner(start.x, start.z, 0); 
-        buildSmartWalls();
+        buildSmartWalls(); // 다시 부드러운 돌담으로 생성!
         
         for(let z = 400; z <= 1800; z += 300) { let p = mapToWorld(200, z); createHouse(p.x, p.z, Math.PI/2); }
         let towerP = mapToWorld(1760, 680); createClockTower(towerP.x, towerP.z);
