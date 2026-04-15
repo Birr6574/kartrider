@@ -12,6 +12,13 @@ const shortcutSegmentsWorld = [
     { p1: mapToWorld(600, 1250), p2: mapToWorld(600, 1000) }
 ];
 
+// 💡 지름길 존 판별 함수
+function inShortcutZone(x, z) {
+    if (Math.abs(x - 88) < 45 && z > 90 && z < 260) return true; // 숏컷 1
+    if (Math.abs(x - -212) < 45 && z > -40 && z < 140) return true; // 숏컷 2
+    return false;
+}
+
 function createMapTexture() {
     const canvas = document.createElement('canvas'); canvas.width = 2048; canvas.height = 2048; const ctx = canvas.getContext('2d');
     
@@ -50,51 +57,53 @@ function createMapTexture() {
     return texture;
 }
 
-function buildSmartWalls() {
-    const R = 48; const step = 2.5; const rawPoints = [];
-    for (let i = 0; i < trackPointsWorld.length - 1; i++) {
-        let p1 = trackPointsWorld[i], p2 = trackPointsWorld[i+1];
+// 💡 [핵심 최적화] 12000개의 실린더 대신, 선분을 따라 쭉 늘린 단일 BoxGeometry 사용
+function buildOptimizedWalls() {
+    const wallMat = new THREE.MeshLambertMaterial({color: 0x95a5a6});
+    const topMat = new THREE.MeshLambertMaterial({color: 0x27ae60});
+    const R = 48; // 트랙 폭
+
+    function addWallLine(x1, z1, x2, z2) {
+        let dx = x2 - x1, dz = z2 - z1;
+        let len = Math.hypot(dx, dz);
+        let cx = (x1 + x2)/2, cz = (z1 + z2)/2;
+        
+        // 지름길 구간에는 돌담을 세우지 않고 뚫어둠!
+        if(inShortcutZone(cx, cz)) return; 
+        
+        let angle = Math.atan2(dx, dz);
+        
+        let wall = new THREE.Mesh(new THREE.BoxGeometry(4, 18, len), wallMat);
+        wall.position.set(cx, 9, cz); wall.rotation.y = angle; wall.castShadow = true;
+        mapGroup.add(wall);
+        
+        let top = new THREE.Mesh(new THREE.BoxGeometry(5, 4, len + 0.5), topMat);
+        top.position.set(cx, 20, cz); top.rotation.y = angle; top.castShadow = true;
+        mapGroup.add(top);
+    }
+
+    for(let i=0; i<trackPointsWorld.length; i++) {
+        let p1 = trackPointsWorld[i];
+        let p2 = trackPointsWorld[(i+1) % trackPointsWorld.length]; 
         let dx = p2.x - p1.x, dz = p2.z - p1.z;
-        let len = Math.hypot(dx, dz); let nx = dz / len, nz = -dx / len;
-        for (let d = 0; d <= len; d += step) {
-            let cx = p1.x + dx * d / len, cz = p1.z + dz * d / len;
-            rawPoints.push({x: cx + nx * R, z: cz + nz * R}); rawPoints.push({x: cx - nx * R, z: cz - nz * R});
+        let len = Math.hypot(dx, dz);
+        if (len === 0) continue;
+        let nx = dz/len, nz = -dx/len;
+        
+        // 좌우 양쪽에 통짜 벽 생성
+        addWallLine(p1.x + nx*R, p1.z + nz*R, p2.x + nx*R, p2.z + nz*R);
+        addWallLine(p1.x - nx*R, p1.z - nz*R, p2.x - nx*R, p2.z - nz*R);
+        
+        // 코너 틈새 마감
+        if(!inShortcutZone(p2.x + nx*R, p2.z + nz*R)) {
+           let joint = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 18, 8), wallMat);
+           joint.position.set(p2.x + nx*R, 9, p2.z + nz*R); mapGroup.add(joint);
         }
-        for (let a = 0; a < Math.PI * 2; a += step / R) {
-            rawPoints.push({x: p1.x + Math.cos(a) * R, z: p1.z + Math.sin(a) * R});
-            rawPoints.push({x: p2.x + Math.cos(a) * R, z: p2.z + Math.sin(a) * R});
+        if(!inShortcutZone(p2.x - nx*R, p2.z - nz*R)) {
+           let joint = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 18, 8), wallMat);
+           joint.position.set(p2.x - nx*R, 9, p2.z - nz*R); mapGroup.add(joint);
         }
     }
-    const validPoints = rawPoints.filter(pt => {
-        let minDist = Infinity;
-        for (let i = 0; i < trackPointsWorld.length - 1; i++) {
-            let p1 = trackPointsWorld[i], p2 = trackPointsWorld[i+1];
-            let A = pt.x - p1.x, B = pt.z - p1.z, C = p2.x - p1.x, D = p2.z - p1.z;
-            let dot = A * C + B * D, len_sq = C * C + D * D, param = (len_sq !== 0) ? dot / len_sq : -1;
-            let xx, zz;
-            if (param < 0) { xx = p1.x; zz = p1.z; } else if (param > 1) { xx = p2.x; zz = p2.z; } else { xx = p1.x + param * C; zz = p1.z + param * D; }
-            let distSq = (pt.x - xx)*(pt.x - xx) + (pt.z - zz)*(pt.z - zz);
-            if (distSq < minDist) minDist = distSq;
-        }
-        if (Math.sqrt(minDist) < R - 0.5) return false;
-
-        if (Math.abs(pt.x - 88) < 35 && pt.z > 100 && pt.z < 250) return false; 
-        if (Math.abs(pt.x - -212) < 35 && pt.z > -25 && pt.z < 125) return false; 
-        return true;
-    });
-
-    const WALL_H = 18; const TOP_H = 4;
-    const baseGeom = new THREE.CylinderGeometry(1.8, 1.8, WALL_H, 8); const topGeom = new THREE.CylinderGeometry(2.0, 2.0, TOP_H, 8);
-    const baseMat = new THREE.MeshLambertMaterial({color: 0x95a5a6}); const topMat = new THREE.MeshLambertMaterial({color: 0x27ae60});
-    const baseInst = new THREE.InstancedMesh(baseGeom, baseMat, validPoints.length); const topInst = new THREE.InstancedMesh(topGeom, topMat, validPoints.length);
-    const dummy = new THREE.Object3D();
-    
-    validPoints.forEach((pt, idx) => {
-        dummy.position.set(pt.x, WALL_H / 2, pt.z); dummy.updateMatrix(); baseInst.setMatrixAt(idx, dummy.matrix);
-        dummy.position.set(pt.x, WALL_H + TOP_H / 2, pt.z); dummy.updateMatrix(); topInst.setMatrixAt(idx, dummy.matrix);
-        // 🚨 최적화 핵심: 여기에 있던 addBoxCollider 12000개를 삭제했습니다! (충돌은 수학 벡터로 완벽 커버됨)
-    });
-    baseInst.castShadow = true; topInst.castShadow = true; mapGroup.add(baseInst); mapGroup.add(topInst);
 }
 
 function createTree(x, z) {
@@ -131,8 +140,8 @@ function createStartBanner(x, z, rotY) {
     const p1 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p1.position.set(0, 17.5, -60); p1.castShadow = true; group.add(p1);
     const p2 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p2.position.set(0, 17.5, 60); p2.castShadow = true; group.add(p2);
     
+    // 이 배너 기둥만 물리 충돌 객체로 등록! (벽돌담은 안 넣음)
     let sin = Math.sin(rotY), cos = Math.cos(rotY);
-    // 물리 엔진은 오직 딱딱한 이 '기둥 2개'만 연산합니다. 
     addBoxCollider(x + (-60)*(-sin), z + (-60)*cos, 4, 4, rotY);
     addBoxCollider(x + (60)*(-sin), z + (60)*cos, 4, 4, rotY);
 
@@ -155,7 +164,7 @@ function loadMap(mapName) {
     currentMap = mapName;
     while(mapGroup.children.length > 0) { mapGroup.remove(mapGroup.children[0]); }
     colliderGrid.clear(); 
-    boxColliders.length = 0; 
+    boxColliders.length = 0; // OBB 물리벽 완벽 초기화
 
     if (mapName === 'village') {
         scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.Fog(0x87CEEB, 200, 900);
@@ -163,7 +172,8 @@ function loadMap(mapName) {
         plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; mapGroup.add(plane);
         
         const start = mapToWorld(1400, 1750); createStartBanner(start.x, start.z, 0); 
-        buildSmartWalls();
+        
+        buildOptimizedWalls(); // 최적화된 단일 박스 도형벽 불러오기
         
         for(let z = 400; z <= 1800; z += 300) { let p = mapToWorld(200, z); createHouse(p.x, p.z, Math.PI/2); }
         let towerP = mapToWorld(1760, 680); createClockTower(towerP.x, towerP.z);
