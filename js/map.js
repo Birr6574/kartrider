@@ -14,11 +14,17 @@ const shortcutSegmentsWorld = [
     { p1: mapToWorld(600, 1250), p2: mapToWorld(600, 1000) }
 ];
 
+function inShortcutZone(x, z) {
+    if (Math.abs(x - 88) < 45 && z > 90 && z < 260) return true;
+    if (Math.abs(x - -212) < 45 && z > -40 && z < 140) return true;
+    return false;
+}
+
 function createMapTexture() {
     const canvas = document.createElement('canvas'); canvas.width = 2048; canvas.height = 2048; const ctx = canvas.getContext('2d');
     
     ctx.fillStyle = '#6ab04c'; ctx.fillRect(0, 0, 2048, 2048);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(750, 50, 1050, 550); // 강물
+    ctx.fillStyle = '#3498db'; ctx.fillRect(750, 50, 1050, 550);
 
     ctx.lineWidth = 100; ctx.strokeStyle = '#e67e22'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(1200, 1500); ctx.lineTo(1200, 1250); ctx.stroke();
@@ -52,7 +58,7 @@ function createMapTexture() {
     return texture;
 }
 
-// 💡 겹침 오류가 없는, 원본 곡선형 돌담(InstancedMesh)으로 복구! (물리 계산 안 하므로 렉 0%)
+// 💡 [렌더링 롤백 & 하이브리드 최적화] 시각적으로 완벽한 스마트 돌담 복구!
 function buildSmartWalls() {
     const R = 48; const step = 2.5; const rawPoints = [];
     for (let i = 0; i < trackPointsWorld.length - 1; i++) {
@@ -68,6 +74,7 @@ function buildSmartWalls() {
             rawPoints.push({x: p2.x + Math.cos(a) * R, z: p2.z + Math.sin(a) * R});
         }
     }
+    
     const validPoints = rawPoints.filter(pt => {
         let minDist = Infinity;
         for (let i = 0; i < trackPointsWorld.length - 1; i++) {
@@ -80,9 +87,7 @@ function buildSmartWalls() {
             if (distSq < minDist) minDist = distSq;
         }
         if (Math.sqrt(minDist) < R - 0.5) return false;
-
-        if (Math.abs(pt.x - 88) < 35 && pt.z > 100 && pt.z < 250) return false; // 숏컷 1 구멍
-        if (Math.abs(pt.x - -212) < 35 && pt.z > -25 && pt.z < 125) return false; // 숏컷 2 구멍
+        if (inShortcutZone(pt.x, pt.z)) return false; // 지름길 구멍 뚫기
         return true;
     });
 
@@ -95,8 +100,9 @@ function buildSmartWalls() {
     validPoints.forEach((pt, idx) => {
         dummy.position.set(pt.x, WALL_H / 2, pt.z); dummy.updateMatrix(); baseInst.setMatrixAt(idx, dummy.matrix);
         dummy.position.set(pt.x, WALL_H + TOP_H / 2, pt.z); dummy.updateMatrix(); topInst.setMatrixAt(idx, dummy.matrix);
-        // 🚨 여기에 addBoxCollider를 안 넣어야 렉이 없습니다! (충돌은 수학 벡터로만 계산)
+        // 🚨 렉의 주범이었던 addBoxCollider(...) 삭제! (눈에만 보이고 물리 연산은 하지 않음)
     });
+    
     baseInst.castShadow = true; topInst.castShadow = true; mapGroup.add(baseInst); mapGroup.add(topInst);
 }
 
@@ -132,7 +138,7 @@ function createStartBanner(x, z, rotY) {
     const p1 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p1.position.set(0, 17.5, -60); p1.castShadow = true; group.add(p1);
     const p2 = new THREE.Mesh(new THREE.BoxGeometry(4, 35, 4), mat); p2.position.set(0, 17.5, 60); p2.castShadow = true; group.add(p2);
     
-    // 이 배너 기둥만 물리 충돌(OBB) 박스에 등록합니다!
+    // 오직 시작 배너 기둥 2개만 3D 물리박스(OBB)로 등록합니다.
     let sin = Math.sin(rotY), cos = Math.cos(rotY);
     addBoxCollider(x + (-60)*(-sin), z + (-60)*cos, 4, 4, rotY);
     addBoxCollider(x + (60)*(-sin), z + (60)*cos, 4, 4, rotY);
