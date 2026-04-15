@@ -23,6 +23,7 @@ function exitToLobby() {
     document.getElementById('lobbyUI').style.display = 'flex'; animateLobby();
 }
 
+// 💡 스키드 마크 최적화
 const MAX_SKIDS = 100;
 const skidPoolL = []; const skidPoolR = [];
 let skidIdx = 0;
@@ -95,6 +96,7 @@ document.getElementById('startBtn').addEventListener('click', () => {
   animateGame(); 
 });
 
+// 💡 메인 게임 루프 (블랙스크린 및 렉 원인 완벽 제거)
 function animateGame() {
   if (!isGameRunning) return;
   requestAnimationFrame(animateGame);
@@ -203,9 +205,12 @@ function animateGame() {
   
   let px = carMesh.position.x, pz = carMesh.position.z;
 
-  // 💡 [최적화] R키 복귀용 중앙선 탐색 (1회 연산)
+  // 💡 [핵심] 오직 '수학적 벡터 계산'으로만 벽을 인식합니다. OBB 박스는 사용하지 않습니다.
+  let hitWall = false, bounceNx = 0, bounceNz = 0;
   let minDistTrack = Infinity, closestXx = 0, closestZz = 0, cI = 0;
+
   if (currentMap === 'village') {
+      // 1. 가장 가까운 트랙 중앙선 찾기
       for (let i = 0; i < trackPointsWorld.length - 1; i++) {
           let p1 = trackPointsWorld[i], p2 = trackPointsWorld[i+1];
           let A = px - p1.x, B = pz - p1.z, C = p2.x - p1.x, D = p2.z - p1.z;
@@ -215,25 +220,62 @@ function animateGame() {
           let distSq = (px - xx)*(px - xx) + (pz - zz)*(pz - zz);
           if (distSq < minDistTrack) { minDistTrack = distSq; closestXx = xx; closestZz = zz; cI = i; }
       }
-  }
 
-  if (keys.r || keys.R) {
-      if (currentMap === 'village') {
-          carMesh.position.set(closestXx, 0, closestZz);
-          let dx = trackPointsWorld[cI+1].x - trackPointsWorld[cI].x;
-          let dz = trackPointsWorld[cI+1].z - trackPointsWorld[cI].z;
-          car.angle = Math.atan2(dx, dz); car.velocityAngle = car.angle;
-      } else {
-          carMesh.position.set(0, 0, 0); car.angle = 0; car.velocityAngle = 0;
+      // 2. 지름길 판정 (구멍 뚫기)
+      let finalDistSq = minDistTrack;
+      let finalClosestX = closestXx;
+      let finalClosestZ = closestZz;
+      let inShortcut = false;
+
+      for (let seg of shortcutSegmentsWorld) {
+          let A = px - seg.p1.x, B = pz - seg.p1.z, C = seg.p2.x - seg.p1.x, D = seg.p2.z - seg.p1.z;
+          let dot = A*C + B*D, len_sq = C*C + D*D, param = (len_sq !== 0) ? dot / len_sq : -1;
+          let xx, zz;
+          if (param < 0) { xx = seg.p1.x; zz = seg.p1.z; } else if (param > 1) { xx = seg.p2.x; zz = seg.p2.z; } else { xx = seg.p1.x + param*C; zz = seg.p1.z + param*D; }
+          let distSq = (px - xx)*(px - xx) + (pz - zz)*(pz - zz);
+          if (distSq < finalDistSq) { 
+              finalDistSq = distSq; finalClosestX = xx; finalClosestZ = zz; inShortcut = true; 
+          }
       }
-      car.speed = 0; car.driftState = 0; car.isBoosting = false; car.isInstantBoosting = false; car.visualRoll = 0;
-      showTechAlert("🔄 복귀!", "#2ecc71"); keys.r = false; keys.R = false; return; 
+
+      let distTrack = Math.sqrt(finalDistSq);
+      
+      // 3. 오프로드 잔디 감속 (38 ~ 48구간)
+      if (distTrack > 38 && distTrack <= 48) { 
+          if (car.speed > 1.2) car.speed *= 0.94; 
+          if (car.speed < -0.5) car.speed *= 0.94;
+          car.currentGrip = 0.03; 
+      }
+
+      // 4. 수학적 벽 충돌 튕김 판정 (48 초과)
+      if (distTrack > 48 && !inShortcut) {
+          let nx = (px - finalClosestX) / distTrack, nz = (pz - finalClosestZ) / distTrack;
+          px = finalClosestX + nx * 48; 
+          pz = finalClosestZ + nz * 48;
+          hitWall = true; bounceNx = nx; bounceNz = nz;
+      }
+      
+      // 5. 결승선 판정
+      let distToHalf = Math.hypot(px - (-362), pz - (-12)); 
+      if (distToHalf < 200) car.checkPoint = true; 
+      
+      let finishX = 188, finishZ = 363; 
+      if (prevX > finishX && px <= finishX && Math.abs(pz - finishZ) < 80) {
+          if (car.checkPoint && car.speed > 0 && !car.isFinished) {
+              car.lap++; car.checkPoint = false;
+              if (car.lap > 3) {
+                  car.isFinished = true;
+                  showTechAlert("🏁 FINISH! 🏁<br><span style='font-size:24px; color:white;'>5초 후 로비로 이동합니다.</span>", "#f1c40f", 5000);
+                  setTimeout(exitToLobby, 5000);
+              } else {
+                  uiLapCount.innerText = car.lap; showTechAlert("LAP " + car.lap, "#3498db");
+              }
+          }
+      }
   }
 
-  // 💡 [최적화] OBB 공간 해시 충돌. 12,000개 연산 없이 오직 근처 벽만 판정합니다!
-  let hitWall = false, bounceNx = 0, bounceNz = 0;
+  // 💡 시작 배너 기둥 등 특수 구조물만 OBB 충돌 검사
   let gridX = Math.floor(px / 50), gridZ = Math.floor(pz / 50);
-  
   for(let i = -1; i <= 1; i++) {
       for(let j = -1; j <= 1; j++) {
           let key = (gridX + i) + ',' + (gridZ + j);
@@ -268,7 +310,7 @@ function animateGame() {
       }
   }
 
-  // 충돌 튕김 및 게이지 삭감
+  // 충돌 튕김 및 게이지 삭감 대미지 로직
   if (hitWall) {
       let vx = Math.sin(car.velocityAngle) * car.speed, vz = Math.cos(car.velocityAngle) * car.speed;
       let dotProduct = vx * bounceNx + vz * bounceNz;
@@ -285,42 +327,18 @@ function animateGame() {
   }
   carMesh.position.x = px; carMesh.position.z = pz;
 
-  // 💡 잔디밭 감속 & 결승선 판정
-  if (currentMap === 'village') {
-      let finalDistSq = minDistTrack;
-      for (let seg of shortcutSegmentsWorld) {
-          let A = px - seg.p1.x, B = pz - seg.p1.z, C = seg.p2.x - seg.p1.x, D = seg.p2.z - seg.p1.z;
-          let dot = A*C + B*D, len_sq = C*C + D*D, param = (len_sq !== 0) ? dot / len_sq : -1;
-          let xx, zz;
-          if (param < 0) { xx = seg.p1.x; zz = seg.p1.z; } else if (param > 1) { xx = seg.p2.x; zz = p2.z; } else { xx = seg.p1.x + param*C; zz = p1.z + param*D; }
-          let distSq = (px - xx)*(px - xx) + (pz - zz)*(pz - zz);
-          if (distSq < finalDistSq) { finalDistSq = distSq; }
+  // R키 복귀 처리
+  if (keys.r || keys.R) {
+      if (currentMap === 'village') {
+          carMesh.position.set(closestXx, 0, closestZz);
+          let dx = trackPointsWorld[cI+1].x - trackPointsWorld[cI].x;
+          let dz = trackPointsWorld[cI+1].z - trackPointsWorld[cI].z;
+          car.angle = Math.atan2(dx, dz); car.velocityAngle = car.angle;
+      } else {
+          carMesh.position.set(0, 0, 0); car.angle = 0; car.velocityAngle = 0;
       }
-
-      let distTrack = Math.sqrt(finalDistSq);
-      
-      if (distTrack > 38 && distTrack <= 48) { 
-          if (car.speed > 1.2) car.speed *= 0.94; 
-          if (car.speed < -0.5) car.speed *= 0.94;
-          car.currentGrip = 0.03; 
-      }
-      
-      let distToHalf = Math.hypot(px - (-362), pz - (-12)); 
-      if (distToHalf < 200) car.checkPoint = true; 
-      
-      let finishX = 188, finishZ = 363; 
-      if (prevX > finishX && px <= finishX && Math.abs(pz - finishZ) < 80) {
-          if (car.checkPoint && car.speed > 0 && !car.isFinished) {
-              car.lap++; car.checkPoint = false;
-              if (car.lap > 3) {
-                  car.isFinished = true;
-                  showTechAlert("🏁 FINISH! 🏁<br><span style='font-size:24px; color:white;'>5초 후 로비로 이동합니다.</span>", "#f1c40f", 5000);
-                  setTimeout(exitToLobby, 5000);
-              } else {
-                  uiLapCount.innerText = car.lap; showTechAlert("LAP " + car.lap, "#3498db");
-              }
-          }
-      }
+      car.speed = 0; car.driftState = 0; car.isBoosting = false; car.isInstantBoosting = false; car.visualRoll = 0;
+      showTechAlert("🔄 복귀!", "#2ecc71"); keys.r = false; keys.R = false; return; 
   }
 
   carMesh.rotation.y = car.angle;
